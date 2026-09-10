@@ -1,4 +1,4 @@
-package Tag;
+package com.daoekinc.cgen.tag;
 public class TagHelper {
 
     /* LocatorTag + tagtype + {parameter} + end/start */
@@ -7,7 +7,7 @@ public class TagHelper {
 
     public String createTag()
     {
-
+        return null;
     }
 
     public void decodeTag()

@@ -1,0 +1,35 @@
+# Maven build output
+/target/
+
+# Maven release and build-helper files
+dependency-reduced-pom.xml
+pom.xml.next
+pom.xml.releaseBackup
+pom.xml.tag
+pom.xml.versionsBackup
+release.properties
+
+# Java compiler and runtime output
+*.class
+hs_err_pid*
+replay_pid*
+
+# IDE-generated project files
+/bin/
+/.classpath
+/.project
+/.settings/
+/.idea/
+*.iml
+
+# Logs
+*.log
+
+# Local environment files
+.env
+.env.*
+!.env.example
+
+# Operating-system metadata
+.DS_Store
+Thumbs.db

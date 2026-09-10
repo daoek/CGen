@@ -1,4 +1,4 @@
-package Tag;
+package com.daoekinc.cgen.tag;
 
 public class CGenTag {
 
@@ -7,6 +7,6 @@ public class CGenTag {
     
     //tag types
     private String tagTypeUser = "user";
-    private String tagType
+    private String tagType;
 
 }
