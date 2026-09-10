@@ -91,6 +91,92 @@ class ValidationTest {
     }
 
     @Test
+    void rejectsAdapterMappingWithMismatchedSignatures() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("bus.interface.yaml"), """
+                kind: interface
+                name: bus
+                invalidReturn: -1
+                functions:
+                  - { name: write, return: int, parameters: [{ type: uint32_t, name: value }] }
+                """);
+        Files.writeString(temporaryDirectory.resolve("bus_hal.interface.yaml"), """
+                kind: interface
+                name: bus_hal
+                invalidReturn: -1
+                functions:
+                  - { name: send, return: void, parameters: [] }
+                """);
+        Files.writeString(temporaryDirectory.resolve("bus_adapter.adapter.yaml"), """
+                kind: adapter
+                name: bus_adapter
+                includes: []
+                from: bus
+                to: bus_hal
+                context: []
+                mappings:
+                  - { from: write, to: send }
+                """);
+        assertEquals(1, cli.run("generate"));
+        assertTrue(cli.errors().contains("mismatched"));
+    }
+
+    @Test
+    void rejectsObserverListenerInterfaceWithNonVoidFunction() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("bus_hal.interface.yaml"), """
+                kind: interface
+                name: bus_hal
+                invalidReturn: -1
+                functions:
+                  - { name: send, return: int, parameters: [] }
+                """);
+        Files.writeString(temporaryDirectory.resolve("events.observer.yaml"), """
+                kind: observer
+                name: events
+                includes: []
+                interface: bus_hal
+                context: []
+                """);
+        assertEquals(1, cli.run("generate"));
+        assertTrue(cli.errors().contains("must return void"));
+    }
+
+    @Test
+    void rejectsCommandTableWithMixedExplicitAndImplicitOpcodes() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("uart_cmd.command-table.yaml"), """
+                kind: command-table
+                name: uart_cmd
+                includes: []
+                context: []
+                commands:
+                  - { name: PING, opcode: 0 }
+                  - { name: RESET }
+                """);
+        assertEquals(1, cli.run("generate"));
+        assertTrue(cli.errors().contains("must either give every command an explicit opcode or none at all"));
+    }
+
+    @Test
+    void rejectsStatusCodesWithoutSuccessCode() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("cgen_status.status-codes.yaml"), """
+                kind: status-codes
+                name: cgen_status
+                includes: []
+                codes:
+                  - { name: INVALID_PARAM, value: -1 }
+                """);
+        assertEquals(1, cli.run("generate"));
+        assertTrue(cli.errors().contains("exactly one code with value 0"));
+    }
+
+    @Test
     void requiresExplicitErrorValueForNonVoidFunction() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));

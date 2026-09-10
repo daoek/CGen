@@ -56,6 +56,10 @@ final class ModuleRenderer {
             out.append("void ").append(function).append('(').append(contract.name()).append("_interface_t *interface, ")
                     .append(module.name()).append("_context_t *context);\n\n");
         }
+        if (module.singleton()) {
+            out.append(CGenTag.generatedItem("function", module.name() + "_instance")).append('\n');
+            out.append(module.name()).append("_context_t *").append(module.name()).append("_instance(void);\n\n");
+        }
         out.append(user.render("module.header.footer", ""));
         out.append(user.renderOrphans());
         out.append("\n#endif /* ").append(guard).append(" */\n");
@@ -67,7 +71,11 @@ final class ModuleRenderer {
         StringBuilder out = new StringBuilder();
         out.append(CGenTag.generatedFile("module-source", module.source().getFileName().toString())).append('\n');
         out.append(docs.file(module.sourceFile(), module.description())).append('\n');
-        out.append("#include \"").append(module.header()).append("\"\n\n");
+        out.append("#include \"").append(module.header()).append("\"\n");
+        if (module.singleton()) {
+            out.append("#include <stdbool.h>\n");
+        }
+        out.append('\n');
         out.append(user.render("module.source.includes", "")).append('\n');
         for (ModuleSpec.Variable variable : module.variables()) {
             out.append(CGenTag.generatedItem(variable.visibility() == ModuleSpec.Visibility.PRIVATE ? "private-variable" : "variable-definition", variable.name())).append('\n');
@@ -118,6 +126,19 @@ final class ModuleRenderer {
                         .append(module.name()).append('_').append(contract.name()).append('_').append(function.name()).append(";\n");
             }
             out.append(indent(project, 1)).append("}\n}\n\n");
+        }
+        if (module.singleton()) {
+            out.append(CGenTag.generatedItem("function", module.name() + "_instance")).append('\n');
+            out.append("static ").append(module.name()).append("_context_t ").append(module.name()).append("_singleton_context;\n");
+            out.append("static bool ").append(module.name()).append("_singleton_initialized = false;\n\n");
+            out.append(module.name()).append("_context_t *").append(module.name()).append("_instance(void)\n{\n")
+                    .append(indent(project, 1)).append("if (!").append(module.name()).append("_singleton_initialized)\n")
+                    .append(indent(project, 1)).append("{\n")
+                    .append(indent(project, 2)).append(module.name()).append("_singleton_initialized = true;\n");
+            out.append(user.render("singleton.init", ""));
+            out.append(indent(project, 1)).append("}\n")
+                    .append(indent(project, 1)).append("return &").append(module.name()).append("_singleton_context;\n")
+                    .append("}\n\n");
         }
         out.append(user.render("module.source.footer", ""));
         out.append(user.renderOrphans());

@@ -15,7 +15,8 @@ public record ModuleSpec(
         List<String> implementsInterfaces,
         List<String> includes,
         List<InterfaceSpec.Field> context,
-        List<Variable> variables) {
+        List<Variable> variables,
+        boolean singleton) {
 
     public record Variable(String type, String name, String description, Visibility visibility, String initial) {
     }
@@ -28,7 +29,7 @@ public record ModuleSpec(
     public static ModuleSpec from(Path source, Map<String, Object> yaml) {
         String contextName = source.toString();
         Values.onlyKeys(yaml, contextName, "kind", "name", "description", "header", "source", "implements",
-                "includes", "context", "variables");
+                "includes", "context", "variables", "singleton");
         if (!Values.requiredString(yaml, "kind", contextName).equals("module")) {
             throw new CGenException(contextName + ".kind must be module");
         }
@@ -66,7 +67,8 @@ public record ModuleSpec(
                     initial));
         }
         Values.uniqueNames(variables.stream().map(Variable::name).toList(), contextName + ".variables");
+        boolean singleton = Boolean.parseBoolean(Values.optionalString(yaml, "singleton", "false", contextName));
         return new ModuleSpec(source, name, description, header, sourceFile, List.copyOf(implemented), includes,
-                fields, List.copyOf(variables));
+                fields, List.copyOf(variables), singleton);
     }
 }

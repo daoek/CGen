@@ -118,6 +118,9 @@ public final class ProjectService {
 
                 # visibility is public (extern in header) or private (static in source).
                 variables: []
+
+                # singleton: true generates a <name>_instance() accessor with lazy init.
+                singleton: false
                 """.formatted(name, name, name, name, implemented, name);
         writeNew(spec, content);
         return spec;
@@ -153,6 +156,110 @@ public final class ProjectService {
                 transitions:
                   - { from: IDLE, event: START, to: RUNNING, guard: false }
                 """.formatted(name, name, name, name, name);
+        writeNew(spec, content);
+        return spec;
+    }
+
+    public Path createObserver(ProjectConfig project, String requestedName, String requestedInterface, int capacity, Path requestedDirectory) {
+        String name = identifier(requestedName, "observer name");
+        String interfaceName = identifier(requestedInterface, "interface name");
+        Path directory = safeDirectory(project, requestedDirectory);
+        Path spec = directory.resolve(name + ".observer.yaml");
+        String content = """
+                kind: observer
+                name: %s
+                description: %s subscriber list
+                header: %s.h
+                source: %s.c
+
+                includes: []
+
+                # Interface every subscriber implements; all its functions must return void.
+                interface: %s
+                capacity: %d
+
+                # Members stored in %s_context_t alongside the subscriber list.
+                context: []
+                """.formatted(name, name, name, name, interfaceName, capacity, name);
+        writeNew(spec, content);
+        return spec;
+    }
+
+    public Path createCommandTable(ProjectConfig project, String requestedName, Path requestedDirectory) {
+        String name = identifier(requestedName, "command table name");
+        Path directory = safeDirectory(project, requestedDirectory);
+        Path spec = directory.resolve(name + ".command-table.yaml");
+        String content = """
+                kind: command-table
+                name: %s
+                description: %s command dispatch table
+                header: %s.h
+                source: %s.c
+
+                includes: []
+
+                # Members stored in %s_context_t.
+                context: []
+
+                # opcode is optional; give every command one explicitly, or omit it on all
+                # of them to auto-number starting at 0.
+                commands:
+                  - { name: PING, opcode: 0, description: Respond with a heartbeat }
+                """.formatted(name, name, name, name, name);
+        writeNew(spec, content);
+        return spec;
+    }
+
+    public Path createStatusCodes(ProjectConfig project, String requestedName, Path requestedDirectory) {
+        String name = identifier(requestedName, "status codes name");
+        Path directory = safeDirectory(project, requestedDirectory);
+        Path spec = directory.resolve(name + ".status-codes.yaml");
+        String content = """
+                kind: status-codes
+                name: %s
+                description: %s status codes
+                header: %s.h
+
+                includes: []
+
+                # Exactly one code must have value 0; it becomes the success value used by
+                # the generated _SUCCEEDED/_FAILED/_CHECK macros.
+                codes:
+                  - { name: OK, value: 0, description: Success }
+                  - { name: INVALID_PARAM, value: -1, description: Invalid parameter }
+                  - { name: NOT_READY, value: -2, description: Not ready }
+                """.formatted(name, name, name);
+        writeNew(spec, content);
+        return spec;
+    }
+
+    public Path createAdapter(ProjectConfig project, String requestedName, String requestedFrom, String requestedTo, Path requestedDirectory) {
+        String name = identifier(requestedName, "adapter name");
+        String from = identifier(requestedFrom, "interface name");
+        String to = identifier(requestedTo, "interface name");
+        Path directory = safeDirectory(project, requestedDirectory);
+        Path spec = directory.resolve(name + ".adapter.yaml");
+        String content = """
+                kind: adapter
+                name: %s
+                description: Adapts %s to %s
+                header: %s.h
+                source: %s.c
+
+                includes: []
+
+                # 'from' is the interface this adapter exposes to callers.
+                # 'to' is the interface it calls into (bound at runtime via %s_set_target).
+                from: %s
+                to: %s
+
+                # Members stored in %s_context_t alongside the target pointer.
+                context: []
+
+                # Functions listed here call straight through to 'to' when their
+                # signatures match exactly. Leave a 'from' function unmapped to hand-write it.
+                mappings: []
+                """.formatted(name, from, to, name, name, name, from, to, name);
         writeNew(spec, content);
         return spec;
     }

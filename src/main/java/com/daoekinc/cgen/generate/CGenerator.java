@@ -2,10 +2,14 @@ package com.daoekinc.cgen.generate;
 
 import com.daoekinc.cgen.CGenException;
 import com.daoekinc.cgen.config.YamlFiles;
+import com.daoekinc.cgen.model.AdapterSpec;
+import com.daoekinc.cgen.model.CommandTableSpec;
 import com.daoekinc.cgen.model.InterfaceSpec;
 import com.daoekinc.cgen.model.ModuleSpec;
+import com.daoekinc.cgen.model.ObserverSpec;
 import com.daoekinc.cgen.model.ProjectConfig;
 import com.daoekinc.cgen.model.StateMachineSpec;
+import com.daoekinc.cgen.model.StatusCodesSpec;
 import com.daoekinc.cgen.project.ProjectService;
 import com.daoekinc.cgen.tag.TagHelper;
 import com.daoekinc.cgen.tag.TagHelper.UserRegions;
@@ -27,6 +31,10 @@ public final class CGenerator {
     private final InterfaceRenderer interfaceRenderer = new InterfaceRenderer();
     private final ModuleRenderer moduleRenderer = new ModuleRenderer();
     private final StateMachineRenderer stateMachineRenderer = new StateMachineRenderer();
+    private final ObserverRenderer observerRenderer = new ObserverRenderer();
+    private final CommandTableRenderer commandTableRenderer = new CommandTableRenderer();
+    private final StatusCodesRenderer statusCodesRenderer = new StatusCodesRenderer();
+    private final AdapterRenderer adapterRenderer = new AdapterRenderer();
 
     public CGenerator(YamlFiles yamlFiles, TagHelper tags, ProjectService projects) {
         this.yamlFiles = yamlFiles;
@@ -87,6 +95,55 @@ public final class CGenerator {
             outputs.add(new Output(header, stateMachineRenderer.renderHeader(project, machine, documentation, headerRegions)));
             outputs.add(new Output(source, stateMachineRenderer.renderSource(project, machine, documentation, sourceRegions)));
         }
+        for (Path path : specificationFiles(scope, ".status-codes.yaml", project)) {
+            StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));
+            Path output = path.getParent().resolve(status.header()).toAbsolutePath().normalize();
+            requireUniqueDestination(destinations, output);
+            UserRegions regions = tags.readForGeneration(output);
+            outputs.add(new Output(output, statusCodesRenderer.render(project, status, documentation, regions)));
+        }
+        for (Path path : specificationFiles(scope, ".observer.yaml", project)) {
+            ObserverSpec observer = ObserverSpec.from(path, yamlFiles.load(path));
+            InterfaceSpec listener = resolveInterface(interfaces, observer.interfaceName(), path, "interface");
+            requireVoidFunctions(listener, path, "observer listener");
+            Path directory = observer.source().getParent().resolve(observer.name());
+            Path header = directory.resolve(observer.header());
+            Path source = directory.resolve(observer.sourceFile());
+            requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
+            requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            UserRegions headerRegions = tags.readForGeneration(header);
+            UserRegions sourceRegions = tags.readForGeneration(source);
+            outputs.add(new Output(header, observerRenderer.renderHeader(project, observer, listener, documentation, headerRegions)));
+            outputs.add(new Output(source, observerRenderer.renderSource(project, observer, listener, documentation, sourceRegions)));
+        }
+        for (Path path : specificationFiles(scope, ".command-table.yaml", project)) {
+            CommandTableSpec table = CommandTableSpec.from(path, yamlFiles.load(path));
+            Path directory = table.source().getParent().resolve(table.name());
+            Path header = directory.resolve(table.header());
+            Path source = directory.resolve(table.sourceFile());
+            requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
+            requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            UserRegions headerRegions = tags.readForGeneration(header);
+            UserRegions sourceRegions = tags.readForGeneration(source);
+            outputs.add(new Output(header, commandTableRenderer.renderHeader(project, table, documentation, headerRegions)));
+            outputs.add(new Output(source, commandTableRenderer.renderSource(project, table, documentation, sourceRegions)));
+        }
+        for (Path path : specificationFiles(scope, ".adapter.yaml", project)) {
+            AdapterSpec adapter = AdapterSpec.from(path, yamlFiles.load(path));
+            InterfaceSpec from = resolveInterface(interfaces, adapter.from(), path, "from");
+            InterfaceSpec to = resolveInterface(interfaces, adapter.to(), path, "to");
+            Map<String, String> mappings = resolveAdapterMappings(adapter, from, to, path);
+            Path directory = adapter.source().getParent().resolve(adapter.name());
+            Path header = directory.resolve(adapter.header());
+            Path source = directory.resolve(adapter.sourceFile());
+            requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
+            requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            UserRegions headerRegions = tags.readForGeneration(header);
+            UserRegions sourceRegions = tags.readForGeneration(source);
+            removeGeneratedFunctionDefaults(project, List.of(from), sourceRegions);
+            outputs.add(new Output(header, adapterRenderer.renderHeader(project, adapter, from, to, documentation, headerRegions)));
+            outputs.add(new Output(source, adapterRenderer.renderSource(project, adapter, from, to, mappings, documentation, sourceRegions)));
+        }
 
         outputs.forEach(output -> tags.writeGenerated(output.path(), output.content(), project.lineEnding()));
         return outputs.stream().map(Output::path).toList();
@@ -119,6 +176,40 @@ public final class CGenerator {
                 }
             }
         }
+        for (Path path : specificationFiles(scope, ".status-codes.yaml", project)) {
+            StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));
+            Path header = path.getParent().resolve(status.header());
+            if (Files.isRegularFile(header) && tags.stripTags(header)) {
+                cleaned.add(header);
+            }
+        }
+        for (Path path : specificationFiles(scope, ".observer.yaml", project)) {
+            ObserverSpec observer = ObserverSpec.from(path, yamlFiles.load(path));
+            Path directory = path.getParent().resolve(observer.name());
+            for (Path output : List.of(directory.resolve(observer.header()), directory.resolve(observer.sourceFile()))) {
+                if (Files.isRegularFile(output) && tags.stripTags(output)) {
+                    cleaned.add(output);
+                }
+            }
+        }
+        for (Path path : specificationFiles(scope, ".command-table.yaml", project)) {
+            CommandTableSpec table = CommandTableSpec.from(path, yamlFiles.load(path));
+            Path directory = path.getParent().resolve(table.name());
+            for (Path output : List.of(directory.resolve(table.header()), directory.resolve(table.sourceFile()))) {
+                if (Files.isRegularFile(output) && tags.stripTags(output)) {
+                    cleaned.add(output);
+                }
+            }
+        }
+        for (Path path : specificationFiles(scope, ".adapter.yaml", project)) {
+            AdapterSpec adapter = AdapterSpec.from(path, yamlFiles.load(path));
+            Path directory = path.getParent().resolve(adapter.name());
+            for (Path output : List.of(directory.resolve(adapter.header()), directory.resolve(adapter.sourceFile()))) {
+                if (Files.isRegularFile(output) && tags.stripTags(output)) {
+                    cleaned.add(output);
+                }
+            }
+        }
         return List.copyOf(cleaned);
     }
 
@@ -127,6 +218,10 @@ public final class CGenerator {
         configurationFiles.addAll(specificationFiles(project.root(), ".interface.yaml", project));
         configurationFiles.addAll(specificationFiles(project.root(), ".module.yaml", project));
         configurationFiles.addAll(specificationFiles(project.root(), ".state-machine.yaml", project));
+        configurationFiles.addAll(specificationFiles(project.root(), ".status-codes.yaml", project));
+        configurationFiles.addAll(specificationFiles(project.root(), ".observer.yaml", project));
+        configurationFiles.addAll(specificationFiles(project.root(), ".command-table.yaml", project));
+        configurationFiles.addAll(specificationFiles(project.root(), ".adapter.yaml", project));
         if (project.documentation().customFile() != null) {
             configurationFiles.add(project.documentation().customFile());
         }
@@ -144,6 +239,50 @@ public final class CGenerator {
             }
         }
         return new DetachResult(List.copyOf(cleaned), List.copyOf(deleted));
+    }
+
+    private static InterfaceSpec resolveInterface(Map<String, InterfaceSpec> interfaces, String name, Path path, String label) {
+        InterfaceSpec contract = interfaces.get(name);
+        if (contract == null) {
+            throw new CGenException(path + " references unknown " + label + " interface '" + name + "'");
+        }
+        return contract;
+    }
+
+    private static void requireVoidFunctions(InterfaceSpec contract, Path path, String label) {
+        for (InterfaceSpec.Function function : contract.functions()) {
+            if (!function.returnType().equals("void")) {
+                throw new CGenException(path + ": " + label + " interface '" + contract.name()
+                        + "' function '" + function.name() + "' must return void");
+            }
+        }
+    }
+
+    private static Map<String, String> resolveAdapterMappings(AdapterSpec adapter, InterfaceSpec from, InterfaceSpec to, Path path) {
+        Map<String, String> mappings = new LinkedHashMap<>();
+        for (AdapterSpec.Mapping mapping : adapter.mappings()) {
+            InterfaceSpec.Function fromFunction = from.functions().stream()
+                    .filter(function -> function.name().equals(mapping.from())).findFirst()
+                    .orElseThrow(() -> new CGenException(path + " maps unknown function '" + mapping.from()
+                            + "' on interface '" + from.name() + "'"));
+            InterfaceSpec.Function toFunction = to.functions().stream()
+                    .filter(function -> function.name().equals(mapping.to())).findFirst()
+                    .orElseThrow(() -> new CGenException(path + " maps unknown function '" + mapping.to()
+                            + "' on interface '" + to.name() + "'"));
+            if (!fromFunction.returnType().equals(toFunction.returnType())) {
+                throw new CGenException(path + " mapping '" + mapping.from() + "' -> '" + mapping.to()
+                        + "' has mismatched return types ('" + fromFunction.returnType() + "' vs '" + toFunction.returnType() + "')");
+            }
+            List<String> fromTypes = fromFunction.parameters().stream().map(InterfaceSpec.Parameter::type).toList();
+            List<String> toTypes = toFunction.parameters().stream().map(InterfaceSpec.Parameter::type).toList();
+            if (!fromTypes.equals(toTypes)) {
+                throw new CGenException(path + " mapping '" + mapping.from() + "' -> '" + mapping.to()
+                        + "' has mismatched parameter types; map functions with identical signatures, or leave '"
+                        + mapping.from() + "' unmapped and implement it by hand");
+            }
+            mappings.put(mapping.from(), mapping.to());
+        }
+        return mappings;
     }
 
     private Map<String, InterfaceSpec> loadInterfaces(ProjectConfig project) {

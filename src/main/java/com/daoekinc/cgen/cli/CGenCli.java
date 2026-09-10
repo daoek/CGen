@@ -89,7 +89,7 @@ public final class CGenCli {
 
     private int create(String[] args) {
         if (args.length < 3) {
-            throw new CGenException("Usage: CGen create interface <name> [directory] | CGen create module <name> [directory] [--implements <name>[,<name>...]] | CGen create state-machine <name> [directory]");
+            throw new CGenException("Usage: CGen create <interface|module|state-machine|observer|command-table|status-codes|adapter> <name> [directory] [...]");
         }
         ProjectConfig project = projects.findAndLoad(workingDirectory);
         if (args[1].equals("interface")) {
@@ -145,7 +145,101 @@ public final class CGenCli {
             out.println("Created " + projects.createStateMachine(project, args[2], directory));
             return 0;
         }
-        throw new CGenException("Create type must be interface, module, or state-machine");
+        if (args[1].equals("command-table")) {
+            Path directory;
+            if (args.length == 3) {
+                directory = workingDirectory;
+            } else if (args.length == 4) {
+                directory = resolveDirectory(args[3]);
+            } else if (args.length == 5 && args[3].equals("--dir")) {
+                directory = resolveDirectory(args[4]);
+            } else {
+                throw new CGenException("Usage: CGen create command-table <name> [directory]");
+            }
+            out.println("Created " + projects.createCommandTable(project, args[2], directory));
+            return 0;
+        }
+        if (args[1].equals("status-codes")) {
+            Path directory;
+            if (args.length == 3) {
+                directory = workingDirectory;
+            } else if (args.length == 4) {
+                directory = resolveDirectory(args[3]);
+            } else if (args.length == 5 && args[3].equals("--dir")) {
+                directory = resolveDirectory(args[4]);
+            } else {
+                throw new CGenException("Usage: CGen create status-codes <name> [directory]");
+            }
+            out.println("Created " + projects.createStatusCodes(project, args[2], directory));
+            return 0;
+        }
+        if (args[1].equals("observer")) {
+            String interfaceName = null;
+            int capacity = 8;
+            Path directory = workingDirectory;
+            boolean directorySpecified = false;
+            int index = 3;
+            while (index < args.length) {
+                if (args[index].equals("--interface") && index + 1 < args.length) {
+                    interfaceName = args[index + 1];
+                    index += 2;
+                } else if (args[index].equals("--capacity") && index + 1 < args.length) {
+                    try {
+                        capacity = Integer.parseInt(args[index + 1]);
+                    } catch (NumberFormatException exception) {
+                        throw new CGenException("--capacity must be an integer");
+                    }
+                    index += 2;
+                } else if (args[index].equals("--dir") && index + 1 < args.length && !directorySpecified) {
+                    directory = resolveDirectory(args[index + 1]);
+                    directorySpecified = true;
+                    index += 2;
+                } else if (!args[index].startsWith("--") && !directorySpecified) {
+                    directory = resolveDirectory(args[index]);
+                    directorySpecified = true;
+                    index++;
+                } else {
+                    throw new CGenException("Usage: CGen create observer <name> --interface <name> [directory] [--capacity <n>]");
+                }
+            }
+            if (interfaceName == null) {
+                throw new CGenException("Usage: CGen create observer <name> --interface <name> [directory] [--capacity <n>]");
+            }
+            out.println("Created " + projects.createObserver(project, args[2], interfaceName, capacity, directory));
+            return 0;
+        }
+        if (args[1].equals("adapter")) {
+            String from = null;
+            String to = null;
+            Path directory = workingDirectory;
+            boolean directorySpecified = false;
+            int index = 3;
+            while (index < args.length) {
+                if (args[index].equals("--from") && index + 1 < args.length) {
+                    from = args[index + 1];
+                    index += 2;
+                } else if (args[index].equals("--to") && index + 1 < args.length) {
+                    to = args[index + 1];
+                    index += 2;
+                } else if (args[index].equals("--dir") && index + 1 < args.length && !directorySpecified) {
+                    directory = resolveDirectory(args[index + 1]);
+                    directorySpecified = true;
+                    index += 2;
+                } else if (!args[index].startsWith("--") && !directorySpecified) {
+                    directory = resolveDirectory(args[index]);
+                    directorySpecified = true;
+                    index++;
+                } else {
+                    throw new CGenException("Usage: CGen create adapter <name> --from <interface> --to <interface> [directory]");
+                }
+            }
+            if (from == null || to == null) {
+                throw new CGenException("Usage: CGen create adapter <name> --from <interface> --to <interface> [directory]");
+            }
+            out.println("Created " + projects.createAdapter(project, args[2], from, to, directory));
+            return 0;
+        }
+        throw new CGenException("Create type must be interface, module, state-machine, observer, command-table, status-codes, or adapter");
     }
 
     private int generate(String[] args) {
@@ -204,6 +298,10 @@ public final class CGenCli {
                   CGen create interface <name> [directory]
                   CGen create module <name> [directory] [--implements <interface>[,<interface>...]]
                   CGen create state-machine <name> [directory]
+                  CGen create observer <name> --interface <interface> [directory] [--capacity <n>]
+                  CGen create command-table <name> [directory]
+                  CGen create status-codes <name> [directory]
+                  CGen create adapter <name> --from <interface> --to <interface> [directory]
                   CGen gen | generate [directory]
                   CGen detach
                 """);
