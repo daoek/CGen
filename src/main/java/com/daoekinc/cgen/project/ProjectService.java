@@ -123,6 +123,40 @@ public final class ProjectService {
         return spec;
     }
 
+    public Path createStateMachine(ProjectConfig project, String requestedName, Path requestedDirectory) {
+        String name = identifier(requestedName, "state machine name");
+        Path directory = safeDirectory(project, requestedDirectory);
+        Path spec = directory.resolve(name + ".state-machine.yaml");
+        String content = """
+                kind: state-machine
+                name: %s
+                description: %s state machine
+                header: %s.h
+                source: %s.c
+
+                includes: []
+
+                # Members stored in %s_context_t alongside the state.
+                context: []
+
+                initial: IDLE
+
+                states:
+                  - { name: IDLE, description: Waiting to start }
+                  - { name: RUNNING, description: In progress }
+
+                events:
+                  - name: START
+                    description: Begin running
+                    parameters: []
+
+                transitions:
+                  - { from: IDLE, event: START, to: RUNNING, guard: false }
+                """.formatted(name, name, name, name, name);
+        writeNew(spec, content);
+        return spec;
+    }
+
     public Path safeDirectory(ProjectConfig project, Path requested) {
         Path normalized = requested.toAbsolutePath().normalize();
         if (!normalized.startsWith(project.root())) {

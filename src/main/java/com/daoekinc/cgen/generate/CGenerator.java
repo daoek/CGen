@@ -5,6 +5,7 @@ import com.daoekinc.cgen.config.YamlFiles;
 import com.daoekinc.cgen.model.InterfaceSpec;
 import com.daoekinc.cgen.model.ModuleSpec;
 import com.daoekinc.cgen.model.ProjectConfig;
+import com.daoekinc.cgen.model.StateMachineSpec;
 import com.daoekinc.cgen.project.ProjectService;
 import com.daoekinc.cgen.tag.TagHelper;
 import com.daoekinc.cgen.tag.TagHelper.UserRegions;
@@ -25,6 +26,7 @@ public final class CGenerator {
     private final ProjectService projects;
     private final InterfaceRenderer interfaceRenderer = new InterfaceRenderer();
     private final ModuleRenderer moduleRenderer = new ModuleRenderer();
+    private final StateMachineRenderer stateMachineRenderer = new StateMachineRenderer();
 
     public CGenerator(YamlFiles yamlFiles, TagHelper tags, ProjectService projects) {
         this.yamlFiles = yamlFiles;
@@ -73,6 +75,19 @@ public final class CGenerator {
             outputs.add(new Output(header, moduleRenderer.renderHeader(project, module, plan.interfaces(), documentation, headerRegions)));
             outputs.add(new Output(source, moduleRenderer.renderSource(project, module, plan.interfaces(), documentation, sourceRegions)));
         }
+        for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
+            StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
+            Path directory = machine.source().getParent().resolve(machine.name());
+            Path header = directory.resolve(machine.header());
+            Path source = directory.resolve(machine.sourceFile());
+            requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
+            requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            UserRegions headerRegions = tags.readForGeneration(header);
+            UserRegions sourceRegions = tags.readForGeneration(source);
+            outputs.add(new Output(header, stateMachineRenderer.renderHeader(project, machine, documentation, headerRegions)));
+            outputs.add(new Output(source, stateMachineRenderer.renderSource(project, machine, documentation, sourceRegions)));
+        }
+
         outputs.forEach(output -> tags.writeGenerated(output.path(), output.content(), project.lineEnding()));
         return outputs.stream().map(Output::path).toList();
     }
@@ -95,6 +110,15 @@ public final class CGenerator {
                 }
             }
         }
+        for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
+            StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
+            Path directory = path.getParent().resolve(machine.name());
+            for (Path output : List.of(directory.resolve(machine.header()), directory.resolve(machine.sourceFile()))) {
+                if (Files.isRegularFile(output) && tags.stripTags(output)) {
+                    cleaned.add(output);
+                }
+            }
+        }
         return List.copyOf(cleaned);
     }
 
@@ -102,6 +126,7 @@ public final class CGenerator {
         Set<Path> configurationFiles = new LinkedHashSet<>();
         configurationFiles.addAll(specificationFiles(project.root(), ".interface.yaml", project));
         configurationFiles.addAll(specificationFiles(project.root(), ".module.yaml", project));
+        configurationFiles.addAll(specificationFiles(project.root(), ".state-machine.yaml", project));
         if (project.documentation().customFile() != null) {
             configurationFiles.add(project.documentation().customFile());
         }

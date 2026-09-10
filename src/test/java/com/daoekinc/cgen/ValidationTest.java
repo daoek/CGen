@@ -49,6 +49,48 @@ class ValidationTest {
     }
 
     @Test
+    void rejectsStateMachineTransitionToUnknownState() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("door.state-machine.yaml"), """
+                kind: state-machine
+                name: door
+                initial: CLOSED
+                states:
+                  - { name: CLOSED }
+                events:
+                  - { name: OPEN_REQUEST, parameters: [] }
+                transitions:
+                  - { from: CLOSED, event: OPEN_REQUEST, to: OPEN }
+                """);
+
+        assertEquals(1, cli.run("generate"));
+        assertTrue(cli.errors().contains(".to references unknown state 'OPEN'"));
+    }
+
+    @Test
+    void rejectsDuplicateStateMachineTransitionForSameStateAndEvent() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("door.state-machine.yaml"), """
+                kind: state-machine
+                name: door
+                initial: CLOSED
+                states:
+                  - { name: CLOSED }
+                  - { name: OPEN }
+                events:
+                  - { name: OPEN_REQUEST, parameters: [] }
+                transitions:
+                  - { from: CLOSED, event: OPEN_REQUEST, to: OPEN }
+                  - { from: CLOSED, event: OPEN_REQUEST, to: CLOSED }
+                """);
+
+        assertEquals(1, cli.run("generate"));
+        assertTrue(cli.errors().contains("duplicate name 'CLOSED/OPEN_REQUEST'"));
+    }
+
+    @Test
     void requiresExplicitErrorValueForNonVoidFunction() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));

@@ -89,7 +89,7 @@ public final class CGenCli {
 
     private int create(String[] args) {
         if (args.length < 3) {
-            throw new CGenException("Usage: CGen create interface <name> [directory] | CGen create module <name> [directory] [--implements <name>[,<name>...]]");
+            throw new CGenException("Usage: CGen create interface <name> [directory] | CGen create module <name> [directory] [--implements <name>[,<name>...]] | CGen create state-machine <name> [directory]");
         }
         ProjectConfig project = projects.findAndLoad(workingDirectory);
         if (args[1].equals("interface")) {
@@ -131,7 +131,21 @@ public final class CGenCli {
             out.println("Created " + projects.createModule(project, args[2], interfaces, directory));
             return 0;
         }
-        throw new CGenException("Create type must be interface or module");
+        if (args[1].equals("state-machine")) {
+            Path directory;
+            if (args.length == 3) {
+                directory = workingDirectory;
+            } else if (args.length == 4) {
+                directory = resolveDirectory(args[3]);
+            } else if (args.length == 5 && args[3].equals("--dir")) {
+                directory = resolveDirectory(args[4]);
+            } else {
+                throw new CGenException("Usage: CGen create state-machine <name> [directory]");
+            }
+            out.println("Created " + projects.createStateMachine(project, args[2], directory));
+            return 0;
+        }
+        throw new CGenException("Create type must be interface, module, or state-machine");
     }
 
     private int generate(String[] args) {
@@ -189,6 +203,7 @@ public final class CGenCli {
                   CGen init [directory]
                   CGen create interface <name> [directory]
                   CGen create module <name> [directory] [--implements <interface>[,<interface>...]]
+                  CGen create state-machine <name> [directory]
                   CGen gen | generate [directory]
                   CGen detach
                 """);
