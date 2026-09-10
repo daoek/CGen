@@ -33,3 +33,5 @@ replay_pid*
 # Operating-system metadata
 .DS_Store
 Thumbs.db
+
+/Sandbox/**

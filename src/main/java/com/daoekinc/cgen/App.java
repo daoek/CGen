@@ -1,10 +1,13 @@
 package com.daoekinc.cgen;
 
-/**
- * Hello world!
- */
+import com.daoekinc.cgen.cli.CGenCli;
+import java.nio.file.Path;
+
 public class App {
     public static void main(String[] args) {
-        System.out.println("Hello World!");
+        int exitCode = new CGenCli(Path.of("."), System.out, System.err).run(args);
+        if (exitCode != 0) {
+            System.exit(exitCode);
+        }
     }
 }
