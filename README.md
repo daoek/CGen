@@ -124,6 +124,9 @@ functions:
 
 The generated interface contains a context/function-pointer table and guarded
 inline dispatch functions, following the pattern in the target examples.
+Every non-`void` function must define `invalidReturn` either at interface or
+function level. This avoids silently generating an invalid `-1` for enum,
+pointer, unsigned, or application-specific return types.
 
 ## Module YAML
 
@@ -146,6 +149,19 @@ variables:
 
 Public variables receive an `extern` declaration in the module header and one
 definition in the source. Private variables are `static` in the source.
+
+## MISRA-oriented generated C
+
+CGen emits MISRA C:2012-friendly control flow: generated functions use a
+single final return, pointer members are accessed only after null checks, and
+generated stubs explicitly consume unused parameters. In a non-`void` module
+user region, assign the final value to `cgen_result` instead of returning early.
+
+MISRA compliance applies to the complete translation unit, including configured
+types, expressions, includes, and user regions. It must therefore be confirmed
+with the project's MISRA checker and deviation policy. The generic interface
+context intentionally converts `void *` to the concrete module context type;
+projects enforcing advisory Rule 11.5 need to record that design deviation.
 
 ## Safe regeneration and permanent detach
 

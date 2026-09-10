@@ -48,7 +48,7 @@ public record InterfaceSpec(
         String name = Values.identifier(Values.requiredString(yaml, "name", context), context + ".name");
         String description = Values.optionalString(yaml, "description", name + " interface", context);
         String header = Values.outputFile(Values.optionalString(yaml, "header", name + "_I.h", context), ".h", context + ".header");
-        String invalidReturn = Values.optionalString(yaml, "invalidReturn", "-1", context);
+        String invalidReturn = Values.optionalString(yaml, "invalidReturn", null, context);
         String uninitializedReturn = Values.optionalString(yaml, "uninitializedReturn", invalidReturn, context);
         List<String> includes = Values.stringList(yaml, "includes", context);
 
@@ -107,10 +107,22 @@ public record InterfaceSpec(
                         Values.optionalString(parameter, "description", "", parameterContext)));
             }
             Values.uniqueNames(parameters.stream().map(Parameter::name).toList(), itemContext + " function " + functionName);
+            String functionInvalidReturn = Values.optionalString(item, "invalidReturn", invalidReturn, itemContext);
+            if (!returnType.equals("void") && functionInvalidReturn == null) {
+                throw new CGenException(itemContext + ".invalidReturn is required for non-void function '" + functionName + "'",
+                        "Example YAML", "invalidReturn: -1");
+            }
+            if (functionInvalidReturn != null) {
+                functionInvalidReturn = oneLine(functionInvalidReturn, itemContext + ".invalidReturn");
+            }
+            String functionUninitializedReturn = Values.optionalString(item, "uninitializedReturn",
+                    uninitializedReturn != null ? uninitializedReturn : functionInvalidReturn, itemContext);
+            if (functionUninitializedReturn != null) {
+                functionUninitializedReturn = oneLine(functionUninitializedReturn, itemContext + ".uninitializedReturn");
+            }
             functions.add(new Function(functionName, returnType,
                     Values.optionalString(item, "description", functionName, itemContext), List.copyOf(parameters),
-                    Values.optionalString(item, "invalidReturn", invalidReturn, itemContext),
-                    Values.optionalString(item, "uninitializedReturn", uninitializedReturn, itemContext)));
+                    functionInvalidReturn, functionUninitializedReturn));
         }
         Values.uniqueNames(functions.stream().map(Function::name).toList(), context + ".functions");
         Values.uniqueNames(enums.stream().map(EnumDef::name).toList(), context + ".enums");
