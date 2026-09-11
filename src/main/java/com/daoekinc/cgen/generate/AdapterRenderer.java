@@ -3,6 +3,7 @@ package com.daoekinc.cgen.generate;
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
+import static com.daoekinc.cgen.generate.RenderSupport.appendUnusedSilencer;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 import static com.daoekinc.cgen.generate.RenderSupport.quotedRelative;
@@ -118,9 +119,9 @@ final class AdapterRenderer {
         }
         String mappedTo = mappings.get(function.name());
         if (mappedTo == null) {
-            out.append(indent(project, 1)).append("(void)adapter;\n");
+            appendUnusedSilencer(out, project, 1, "adapter");
             for (InterfaceSpec.Parameter parameter : function.parameters()) {
-                out.append(indent(project, 1)).append("(void)").append(parameter.name()).append(";\n");
+                appendUnusedSilencer(out, project, 1, parameter.name());
             }
             out.append('\n');
             out.append(user.render("function." + from.name() + "." + function.name() + ".body", "", indent(project, 1)));

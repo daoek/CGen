@@ -3,6 +3,7 @@ package com.daoekinc.cgen.generate;
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
+import static com.daoekinc.cgen.generate.RenderSupport.appendUnusedSilencer;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 
@@ -114,15 +115,17 @@ final class StateMachineRenderer {
         for (StateMachineSpec.State state : machine.states()) {
             out.append(CGenTag.generatedItem("private-function", machine.name() + "_enter_" + state.name())).append('\n');
             out.append("static void ").append(machine.name()).append("_enter_").append(state.name())
-                    .append('(').append(machine.name()).append("_context_t *context)\n{\n")
-                    .append(indent(project, 1)).append("(void)context;\n\n");
+                    .append('(').append(machine.name()).append("_context_t *context)\n{\n");
+            appendUnusedSilencer(out, project, 1, "context");
+            out.append('\n');
             out.append(user.render("state." + state.name() + ".entry", "", indent(project, 1)));
             out.append("}\n\n");
 
             out.append(CGenTag.generatedItem("private-function", machine.name() + "_exit_" + state.name())).append('\n');
             out.append("static void ").append(machine.name()).append("_exit_").append(state.name())
-                    .append('(').append(machine.name()).append("_context_t *context)\n{\n")
-                    .append(indent(project, 1)).append("(void)context;\n\n");
+                    .append('(').append(machine.name()).append("_context_t *context)\n{\n");
+            appendUnusedSilencer(out, project, 1, "context");
+            out.append('\n');
             out.append(user.render("state." + state.name() + ".exit", "", indent(project, 1)));
             out.append("}\n\n");
         }
@@ -188,7 +191,7 @@ final class StateMachineRenderer {
             out.append(")\n{\n");
             out.append(indent(project, 1)).append("bool cgen_transitioned = false;\n");
             for (InterfaceSpec.Parameter parameter : event.parameters()) {
-                out.append(indent(project, 1)).append("(void)").append(parameter.name()).append(";\n");
+                appendUnusedSilencer(out, project, 1, parameter.name());
             }
             out.append('\n');
             out.append(indent(project, 1)).append("switch (context->state)\n").append(indent(project, 1)).append("{\n");

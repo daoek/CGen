@@ -3,6 +3,7 @@ package com.daoekinc.cgen.generate;
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
+import static com.daoekinc.cgen.generate.RenderSupport.appendUnusedSilencer;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 import static com.daoekinc.cgen.generate.RenderSupport.quotedRelative;
@@ -23,7 +24,7 @@ final class ModuleRenderer {
         StringBuilder out = new StringBuilder();
         appendHeaderTop(out, module, interfaces, docs, user, guard);
         appendPublicVariableDeclarations(out, project, module, docs, accessors);
-        appendContextStruct(out, project, module);
+        appendContextStruct(out, project, module, interfaces);
         appendBindFunctionDeclarations(out, module, interfaces);
         appendSingletonDeclaration(out, module);
         appendHeaderBottom(out, user, guard);
@@ -65,8 +66,17 @@ final class ModuleRenderer {
         }
     }
 
-    private static void appendContextStruct(StringBuilder out, ProjectConfig project, ModuleSpec module) {
+    private static void appendContextStruct(StringBuilder out, ProjectConfig project, ModuleSpec module,
+                                             List<InterfaceSpec> interfaces) {
+        boolean needed = !module.context().isEmpty() || module.singleton() || !interfaces.isEmpty();
+        if (!needed) {
+            return;
+        }
         out.append(CGenTag.generatedItem("context", module.name())).append('\n');
+        if (module.context().isEmpty() && !module.singleton()) {
+            out.append("typedef void ").append(module.name()).append("_context_t;\n\n");
+            return;
+        }
         out.append("typedef struct\n{\n");
         if (module.context().isEmpty()) {
             out.append(indent(project, 1)).append("unsigned char reserved;\n");
@@ -185,9 +195,9 @@ final class ModuleRenderer {
                 out.append(indent(project, 1)).append(function.returnType()).append(" cgen_result = ")
                         .append(function.invalidReturn()).append(";\n");
             }
-            out.append(indent(project, 1)).append("(void)module;\n");
+            appendUnusedSilencer(out, project, 1, "module");
             for (InterfaceSpec.Parameter parameter : function.parameters()) {
-                out.append(indent(project, 1)).append("(void)").append(parameter.name()).append(";\n");
+                appendUnusedSilencer(out, project, 1, parameter.name());
             }
             out.append('\n');
             out.append(user.render("function." + contract.name() + "." + function.name() + ".body", "", indent(project, 1)));

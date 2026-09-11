@@ -78,11 +78,20 @@ public final class CGenCli {
     }
 
     private int init(String[] args) {
-        if (args.length > 2) {
-            throw new CGenException("Usage: CGen init [directory]");
+        boolean force = false;
+        Path directory = workingDirectory;
+        boolean directorySpecified = false;
+        for (int index = 1; index < args.length; index++) {
+            if (args[index].equals("-f") || args[index].equals("--force")) {
+                force = true;
+            } else if (!directorySpecified) {
+                directory = workingDirectory.resolve(args[index]).normalize();
+                directorySpecified = true;
+            } else {
+                throw new CGenException("Usage: CGen init [directory] [-f|--force]");
+            }
         }
-        Path directory = args.length == 2 ? workingDirectory.resolve(args[1]).normalize() : workingDirectory;
-        Path file = projects.init(directory);
+        Path file = projects.init(directory, force);
         out.println("Created " + file);
         return 0;
     }
@@ -207,12 +216,22 @@ public final class CGenCli {
     }
 
     private int generate(String[] args) {
-        if (args.length > 2) {
-            throw new CGenException("Usage: CGen generate [directory]");
+        boolean force = false;
+        Path directory = workingDirectory;
+        boolean directorySpecified = false;
+        for (int index = 1; index < args.length; index++) {
+            if (args[index].equals("-f") || args[index].equals("--force")) {
+                force = true;
+            } else if (!directorySpecified) {
+                directory = resolveDirectory(args[index]);
+                directorySpecified = true;
+            } else {
+                throw new CGenException("Usage: CGen generate [directory] [-f|--force]");
+            }
         }
         ProjectConfig project = projects.findAndLoad(workingDirectory);
-        Path scope = projects.existingDirectory(project, args.length == 2 ? resolveDirectory(args[1]) : workingDirectory);
-        List<Path> files = generator.generate(project, scope,
+        Path scope = projects.existingDirectory(project, directory);
+        List<Path> files = generator.generate(project, scope, force,
                 (completed, total, path) -> printProgress(completed, total, project.root().relativize(path)));
         if (!files.isEmpty()) {
             out.println();
@@ -282,7 +301,7 @@ public final class CGenCli {
                 CGen - YAML-driven C interface and module generator
 
                 Usage:
-                  CGen init [directory]
+                  CGen init [directory] [-f|--force]
                   CGen create interface <name> [directory]
                   CGen create module <name> [directory] [--implements <interface>[,<interface>...]]
                   CGen create state-machine <name> [directory]
@@ -290,8 +309,12 @@ public final class CGenCli {
                   CGen create command-table <name> [directory]
                   CGen create status-codes <name> [directory]
                   CGen create adapter <name> --from <interface> --to <interface> [directory]
-                  CGen gen | generate [directory]
+                  CGen gen | generate [directory] [-f|--force]
                   CGen detach
+
+                -f, --force
+                  init: overwrite an existing cgen.yaml instead of refusing.
+                  generate: overwrite files on disk that aren't CGen-generated instead of refusing.
                 """);
     }
 }

@@ -21,7 +21,7 @@ public final class ProjectService {
         this.yamlFiles = yamlFiles;
     }
 
-    public Path init(Path requestedDirectory) {
+    public Path init(Path requestedDirectory, boolean force) {
         Path root = requestedDirectory.toAbsolutePath().normalize();
         try {
             Files.createDirectories(root);
@@ -40,11 +40,14 @@ public final class ProjectService {
                     format:
                       indent: 4
                       lineEnding: lf
+                      # suppressUnusedWarnings: false # emit (void)param; lines in generated stub bodies (default true)
+                      # publicVariables: accessors # extern (default) or accessors (getter/setter functions)
                     """.formatted(directoryName.replace("'", "''"));
-            Files.writeString(projectFile, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+            StandardOpenOption existsOption = force ? StandardOpenOption.TRUNCATE_EXISTING : StandardOpenOption.CREATE_NEW;
+            Files.writeString(projectFile, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE, existsOption);
             return projectFile;
         } catch (FileAlreadyExistsException exception) {
-            throw new CGenException(root.resolve(PROJECT_FILE) + " already exists; init will not overwrite it");
+            throw new CGenException(root.resolve(PROJECT_FILE) + " already exists; use -f/--force to overwrite it");
         } catch (IOException exception) {
             throw new CGenException("Cannot initialize project at " + root + ": " + exception.getMessage(), exception);
         }

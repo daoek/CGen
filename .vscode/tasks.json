@@ -26,6 +26,30 @@
                 "focus": false
             },
             "problemMatcher": []
+        },
+        {
+            "label": "CGen: Debug Install (local build, overwrite)",
+            "detail": "Packages the project and force-installs the newest local jar to %LOCALAPPDATA%\\CGen, replacing whatever version (including a released one) is installed there.",
+            "type": "process",
+            "command": "powershell.exe",
+            "args": [
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                "${workspaceFolder}\\scripts\\install.ps1"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "group": "build",
+            "presentation": {
+                "reveal": "always",
+                "panel": "shared",
+                "clear": true,
+                "focus": false
+            },
+            "problemMatcher": []
         }
     ]
 }

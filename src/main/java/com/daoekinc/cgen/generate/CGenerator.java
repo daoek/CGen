@@ -43,10 +43,14 @@ public final class CGenerator {
     }
 
     public List<Path> generate(ProjectConfig project, Path scope) {
-        return generate(project, scope, (completed, total, path) -> { });
+        return generate(project, scope, false, (completed, total, path) -> { });
     }
 
     public List<Path> generate(ProjectConfig project, Path scope, ProgressListener progress) {
+        return generate(project, scope, false, progress);
+    }
+
+    public List<Path> generate(ProjectConfig project, Path scope, boolean force, ProgressListener progress) {
         DocumentationRenderer documentation = new DocumentationRenderer(project, yamlFiles);
         Map<String, InterfaceSpec> interfaces = loadInterfaces(project);
         List<ModulePlan> modules = new ArrayList<>();
@@ -72,7 +76,7 @@ public final class CGenerator {
             }
             Path output = spec.source().getParent().resolve(spec.header()).toAbsolutePath().normalize();
             requireUniqueDestination(destinations, output);
-            UserRegions regions = tags.readForGeneration(output);
+            UserRegions regions = tags.readForGeneration(output, force);
             outputs.add(new Output(output, interfaceRenderer.render(project, spec, documentation, regions)));
         }
         for (ModulePlan plan : modules) {
@@ -81,8 +85,8 @@ public final class CGenerator {
             Path source = module.source().getParent().resolve(module.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
-            UserRegions headerRegions = tags.readForGeneration(header);
-            UserRegions sourceRegions = tags.readForGeneration(source);
+            UserRegions headerRegions = tags.readForGeneration(header, force);
+            UserRegions sourceRegions = tags.readForGeneration(source, force);
             removeGeneratedFunctionDefaults(project, interfaces.values(), sourceRegions);
             outputs.add(new Output(header, moduleRenderer.renderHeader(project, module, plan.interfaces(), documentation, headerRegions)));
             outputs.add(new Output(source, moduleRenderer.renderSource(project, module, plan.interfaces(), documentation, sourceRegions)));
@@ -93,8 +97,8 @@ public final class CGenerator {
             Path source = machine.source().getParent().resolve(machine.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
-            UserRegions headerRegions = tags.readForGeneration(header);
-            UserRegions sourceRegions = tags.readForGeneration(source);
+            UserRegions headerRegions = tags.readForGeneration(header, force);
+            UserRegions sourceRegions = tags.readForGeneration(source, force);
             outputs.add(new Output(header, stateMachineRenderer.renderHeader(project, machine, documentation, headerRegions)));
             outputs.add(new Output(source, stateMachineRenderer.renderSource(project, machine, documentation, sourceRegions)));
         }
@@ -102,7 +106,7 @@ public final class CGenerator {
             StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));
             Path output = path.getParent().resolve(status.header()).toAbsolutePath().normalize();
             requireUniqueDestination(destinations, output);
-            UserRegions regions = tags.readForGeneration(output);
+            UserRegions regions = tags.readForGeneration(output, force);
             outputs.add(new Output(output, statusCodesRenderer.render(project, status, documentation, regions)));
         }
         for (Path path : specificationFiles(scope, ".observer.yaml", project)) {
@@ -113,8 +117,8 @@ public final class CGenerator {
             Path source = observer.source().getParent().resolve(observer.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
-            UserRegions headerRegions = tags.readForGeneration(header);
-            UserRegions sourceRegions = tags.readForGeneration(source);
+            UserRegions headerRegions = tags.readForGeneration(header, force);
+            UserRegions sourceRegions = tags.readForGeneration(source, force);
             outputs.add(new Output(header, observerRenderer.renderHeader(project, observer, listener, documentation, headerRegions)));
             outputs.add(new Output(source, observerRenderer.renderSource(project, observer, listener, documentation, sourceRegions)));
         }
@@ -124,8 +128,8 @@ public final class CGenerator {
             Path source = table.source().getParent().resolve(table.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
-            UserRegions headerRegions = tags.readForGeneration(header);
-            UserRegions sourceRegions = tags.readForGeneration(source);
+            UserRegions headerRegions = tags.readForGeneration(header, force);
+            UserRegions sourceRegions = tags.readForGeneration(source, force);
             outputs.add(new Output(header, commandTableRenderer.renderHeader(project, table, documentation, headerRegions)));
             outputs.add(new Output(source, commandTableRenderer.renderSource(project, table, documentation, sourceRegions)));
         }
@@ -138,8 +142,8 @@ public final class CGenerator {
             Path source = adapter.source().getParent().resolve(adapter.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
-            UserRegions headerRegions = tags.readForGeneration(header);
-            UserRegions sourceRegions = tags.readForGeneration(source);
+            UserRegions headerRegions = tags.readForGeneration(header, force);
+            UserRegions sourceRegions = tags.readForGeneration(source, force);
             removeGeneratedFunctionDefaults(project, List.of(from), sourceRegions);
             outputs.add(new Output(header, adapterRenderer.renderHeader(project, adapter, from, to, documentation, headerRegions)));
             outputs.add(new Output(source, adapterRenderer.renderSource(project, adapter, from, to, mappings, documentation, sourceRegions)));

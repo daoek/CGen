@@ -15,17 +15,17 @@ import java.util.Map;
 import java.util.Set;
 
 public final class TagHelper {
-    public UserRegions readForGeneration(Path output) {
+    public UserRegions readForGeneration(Path output, boolean force) {
         if (!Files.exists(output)) {
             return new UserRegions(Map.of());
         }
         try {
             String content = Files.readString(output);
             boolean generated = content.lines().anyMatch(CGenTag::isGeneratedFile);
-            if (!generated) {
-                throw new CGenException("Refusing to overwrite non-CGen file " + output);
+            if (!generated && !force) {
+                throw new CGenException("Refusing to overwrite non-CGen file " + output + " (use -f/--force to overwrite)");
             }
-            return new UserRegions(extract(content, output));
+            return new UserRegions(generated ? extract(content, output) : Map.of());
         } catch (IOException exception) {
             throw new CGenException("Cannot read " + output + ": " + exception.getMessage(), exception);
         }

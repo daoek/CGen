@@ -2,6 +2,7 @@ package com.daoekinc.cgen.generate;
 
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
+import static com.daoekinc.cgen.generate.RenderSupport.appendUnusedSilencer;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 
@@ -96,10 +97,11 @@ final class CommandTableRenderer {
         for (CommandTableSpec.Command command : table.commands()) {
             out.append(CGenTag.generatedItem("private-function", table.name() + "_handle_" + command.name())).append('\n');
             out.append("static void ").append(table.name()).append("_handle_").append(command.name())
-                    .append('(').append(table.name()).append("_context_t *context, const uint8_t *payload, uint32_t length)\n{\n")
-                    .append(indent(project, 1)).append("(void)context;\n")
-                    .append(indent(project, 1)).append("(void)payload;\n")
-                    .append(indent(project, 1)).append("(void)length;\n\n");
+                    .append('(').append(table.name()).append("_context_t *context, const uint8_t *payload, uint32_t length)\n{\n");
+            appendUnusedSilencer(out, project, 1, "context");
+            appendUnusedSilencer(out, project, 1, "payload");
+            appendUnusedSilencer(out, project, 1, "length");
+            out.append('\n');
             out.append(user.render("command." + command.name() + ".body", "", indent(project, 1)));
             out.append("}\n\n");
         }

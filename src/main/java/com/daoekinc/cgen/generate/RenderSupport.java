@@ -48,6 +48,12 @@ final class RenderSupport {
         return " ".repeat(project.indent() * level);
     }
 
+    static void appendUnusedSilencer(StringBuilder out, ProjectConfig project, int level, String name) {
+        if (project.suppressUnusedWarnings()) {
+            out.append(indent(project, level)).append("(void)").append(name).append(";\n");
+        }
+    }
+
     static String macro(String file) {
         String value = file.toUpperCase().replaceAll("[^A-Z0-9]", "_");
         return value.endsWith("_") ? value : value + "_";
