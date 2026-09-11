@@ -266,9 +266,6 @@ public final class ProjectService {
 
     public Path safeDirectory(ProjectConfig project, Path requested) {
         Path normalized = requested.toAbsolutePath().normalize();
-        if (!normalized.startsWith(project.root())) {
-            throw new CGenException("Path escapes project: " + requested);
-        }
         try {
             Files.createDirectories(normalized);
             Path realRoot = project.root().toRealPath();
@@ -284,9 +281,6 @@ public final class ProjectService {
 
     public Path existingDirectory(ProjectConfig project, Path requested) {
         Path normalized = requested.toAbsolutePath().normalize();
-        if (!normalized.startsWith(project.root())) {
-            throw new CGenException("Path escapes project: " + requested);
-        }
         try {
             Path realRoot = project.root().toRealPath();
             Path realDirectory = normalized.toRealPath();
