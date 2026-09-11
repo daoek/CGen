@@ -63,6 +63,17 @@ the current directory. `generate [directory]` scans the specified directory
 tree; without one it scans the current directory. Interface references are
 resolved across the whole project. `gen` is an alias for `generate`.
 
+`create` also scaffolds the other generator kinds (see their sections below
+for the full YAML shape each one produces):
+
+```console
+CGen create state-machine door
+CGen create observer button_events --interface button_listener [--capacity 8]
+CGen create command-table uart_cmd
+CGen create status-codes cgen_status
+CGen create adapter bus_adapter --from bus --to bus_hal
+```
+
 ## Project configuration
 
 ```yaml
@@ -149,6 +160,191 @@ variables:
 
 Public variables receive an `extern` declaration in the module header and one
 definition in the source. Private variables are `static` in the source.
+
+Set `singleton: true` to also generate a lazy-init accessor instead of relying
+on an externally supplied context:
+
+```yaml
+singleton: true
+```
+
+This adds `<name>_context_t *<name>_instance(void)` to the header. The source
+keeps the context as static storage and runs a `singleton.init` user region
+the first time the accessor is called:
+
+```c
+/*@CGen(+singleton.init)*/
+/* One-time setup for the singleton instance. */
+/*@CGen(-singleton.init)*/
+```
+
+## State machine YAML
+
+A state machine YAML generates its header/source pair into its own
+`<name>/` subfolder next to the YAML (e.g. `door.state-machine.yaml` ->
+`door/door.h`, `door/door.c`), so multiple specs in one directory don't dump
+a flat pile of headers and sources.
+
+```yaml
+kind: state-machine
+name: door
+description: Door state machine
+header: door.h
+source: door.c
+includes: []
+context:
+  - { type: uint32_t, name: open_count }
+
+initial: CLOSED
+
+states:
+  - { name: CLOSED, description: Door is closed }
+  - { name: OPEN, description: Door is open }
+
+events:
+  - name: OPEN_REQUEST
+    description: Request to open
+    parameters: []
+
+transitions:
+  - { from: CLOSED, event: OPEN_REQUEST, to: OPEN, guard: true }
+```
+
+Each `(from, event)` pair must be unique, so the generated dispatch is never
+ambiguous. Generated API: `door_init(context)`, one `door_on_<EVENT>(context,
+...)` function per event, and a `door_state_t`/`door_context_t` pair (context
+always carries `state` plus your `context` fields). Per state, entry/exit
+hooks are user regions:
+
+```c
+/*@CGen(+state.OPEN.entry)*/
+/*@CGen(-state.OPEN.entry)*/
+/*@CGen(+state.OPEN.exit)*/
+/*@CGen(-state.OPEN.exit)*/
+```
+
+When `guard: true`, the transition gets a `bool cgen_guard = true;` default
+you can override in `transition.<from>.<event>.guard`; a `false` guard or a
+state/event combination with no matching transition both fall through to
+`event.<EVENT>.unhandled`.
+
+## Observer YAML
+
+Fans a single call out to every subscriber implementing an existing
+`interface` — that interface's functions must all return `void` (there is no
+sensible way to aggregate N subscriber return values). Header/source go into
+their own `<name>/` subfolder, same as state machines.
+
+```yaml
+kind: observer
+name: button_events
+description: Button event fan-out
+includes: []
+interface: button_listener
+capacity: 8
+context: []
+```
+
+Generated API: `button_events_init`, `button_events_subscribe`/
+`_unsubscribe` (fixed-capacity array, no allocation), and one
+`button_events_publish_<function>(context, ...)` per function on
+`button_listener`, which loops subscribers and calls straight through the
+listener interface's own generated dispatch wrapper. No user regions —
+fan-out is fully mechanical; put your logic in the modules that implement
+`button_listener`.
+
+## Command table YAML
+
+A generic UART/CLI-style opcode dispatcher. Header/source go into their own
+`<name>/` subfolder.
+
+```yaml
+kind: command-table
+name: uart_cmd
+description: UART command table
+includes: []
+context: []
+
+commands:
+  - { name: PING, opcode: 0 }
+  - { name: RESET, opcode: 1 }
+```
+
+Give every command an explicit `opcode`, or omit it on all of them to
+auto-number starting at 0 — mixing the two is rejected. Generated API:
+`void uart_cmd_dispatch(context, uart_cmd_command_t command, const uint8_t
+*payload, uint32_t length)`, which switches on the opcode enum into one
+static handler per command:
+
+```c
+/*@CGen(+command.PING.body)*/
+/*@CGen(-command.PING.body)*/
+```
+
+An opcode with no matching command falls through to `command.unknown`.
+
+## Status codes YAML
+
+A standalone, header-only (no source, no subfolder) shared status enum plus
+checking macros. Purely additive — it does not change how existing
+`interface.yaml` files declare their own `invalidReturn`/`uninitializedReturn`.
+
+```yaml
+kind: status-codes
+name: cgen_status
+description: Shared status codes
+includes: []
+
+codes:
+  - { name: OK, value: 0, description: Success }
+  - { name: INVALID_PARAM, value: -1 }
+  - { name: NOT_READY, value: -2 }
+```
+
+Exactly one code must have `value: 0`; it becomes the success value.
+Generates `cgen_status_t` plus:
+
+```c
+#define CGEN_STATUS_SUCCEEDED(status) ((status) == CGEN_STATUS_OK)
+#define CGEN_STATUS_FAILED(status) (!CGEN_STATUS_SUCCEEDED(status))
+#define CGEN_STATUS_CHECK(status_expression) \
+    do { cgen_status_t cgen_status = (status_expression); \
+        if (CGEN_STATUS_FAILED(cgen_status)) { return cgen_status; } \
+    } while (0)
+```
+
+## Adapter YAML
+
+Glue between two existing, incompatible interfaces — typically a project's
+own contract (`from`) and a vendor HAL (`to`). Header/source go into their
+own `<name>/` subfolder.
+
+```yaml
+kind: adapter
+name: bus_adapter
+description: Adapts bus to bus_hal
+includes: []
+from: bus
+to: bus_hal
+context: []
+
+mappings:
+  - { from: write, to: send }
+```
+
+`from` is the interface this adapter exposes (bound via the usual
+`bus_adapter_bind_bus(interface, context)`); `to` is the interface it calls
+into, supplied at runtime via the generated `bus_adapter_set_target(context,
+target)`. A mapped function is only accepted when both functions have the
+exact same parameter types (in order) and return type — CGen then generates
+a direct call-through with no user code needed. Any `from` function left out
+of `mappings`, or rejected for a signature mismatch, falls back to a plain
+stub body exactly like an unmapped `module` function:
+
+```c
+/*@CGen(+function.bus.reset.body)*/
+/*@CGen(-function.bus.reset.body)*/
+```
 
 ## MISRA-oriented generated C
 
