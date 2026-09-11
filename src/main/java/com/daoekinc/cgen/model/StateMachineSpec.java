@@ -35,14 +35,8 @@ public record StateMachineSpec(
         if (!Values.requiredString(yaml, "kind", contextName).equals("state-machine")) {
             throw new CGenException(contextName + ".kind must be state-machine");
         }
-        String name = Values.identifier(Values.requiredString(yaml, "name", contextName), contextName + ".name");
-        String description = Values.optionalString(yaml, "description", name + " state machine", contextName);
-        String header = Values.outputFile(Values.optionalString(yaml, "header", name + ".h", contextName), ".h",
-                contextName + ".header");
-        String sourceFile = Values.outputFile(Values.optionalString(yaml, "source", name + ".c", contextName), ".c",
-                contextName + ".source");
-        List<String> includes = Values.stringList(yaml, "includes", contextName);
-        List<InterfaceSpec.Field> context = InterfaceSpec.parseFields(yaml, "context", contextName);
+        Values.CommonFields common = Values.commonFields(yaml, contextName, "state machine");
+        String name = common.name();
 
         List<State> states = new ArrayList<>();
         for (Map<String, Object> item : Values.mapList(yaml, "states", contextName)) {
@@ -61,23 +55,8 @@ public record StateMachineSpec(
             String itemContext = contextName + ".events";
             Values.onlyKeys(item, itemContext, "name", "description", "parameters");
             String eventName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
-            List<InterfaceSpec.Parameter> parameters = new ArrayList<>();
-            List<Map<String, Object>> parameterItems = Values.itemList(item, "parameters", itemContext,
-                    """
-                    parameters:
-                      - uint8_t *buffer
-                      - uint32_t len""", text -> Values.compactField(text, itemContext + ".parameters"));
-            for (int parameterIndex = 0; parameterIndex < parameterItems.size(); parameterIndex++) {
-                Map<String, Object> parameter = parameterItems.get(parameterIndex);
-                String parameterContext = itemContext + ".parameters[" + parameterIndex + "]";
-                Values.onlyKeys(parameter, parameterContext, "type", "name", "description");
-                parameters.add(new InterfaceSpec.Parameter(
-                        InterfaceSpec.oneLine(Values.requiredString(parameter, "type", parameterContext), parameterContext + ".type"),
-                        Values.identifier(Values.requiredString(parameter, "name", parameterContext), parameterContext + ".name"),
-                        Values.optionalString(parameter, "description", "", parameterContext)));
-            }
-            Values.uniqueNames(parameters.stream().map(InterfaceSpec.Parameter::name).toList(), itemContext + " event " + eventName);
-            events.add(new Event(eventName, Values.optionalString(item, "description", "", itemContext), List.copyOf(parameters)));
+            List<InterfaceSpec.Parameter> parameters = InterfaceSpec.parseParameters(item, "parameters", itemContext, "event " + eventName);
+            events.add(new Event(eventName, Values.optionalString(item, "description", "", itemContext), parameters));
         }
         Values.uniqueNames(events.stream().map(Event::name).toList(), contextName + ".events");
 
@@ -110,7 +89,8 @@ public record StateMachineSpec(
         List<String> transitionKeys = transitions.stream().map(transition -> transition.from() + "/" + transition.event()).toList();
         Values.uniqueNames(transitionKeys, contextName + ".transitions (from/event pairs)");
 
-        return new StateMachineSpec(source, name, description, header, sourceFile, includes, context,
-                List.copyOf(states), List.copyOf(events), List.copyOf(transitions), initial);
+        return new StateMachineSpec(source, name, common.description(), common.header(), common.sourceFile(),
+                common.includes(), common.context(), List.copyOf(states), List.copyOf(events),
+                List.copyOf(transitions), initial);
     }
 }

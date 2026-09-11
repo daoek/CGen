@@ -26,14 +26,8 @@ public record CommandTableSpec(
         if (!Values.requiredString(yaml, "kind", contextName).equals("command-table")) {
             throw new CGenException(contextName + ".kind must be command-table");
         }
-        String name = Values.identifier(Values.requiredString(yaml, "name", contextName), contextName + ".name");
-        String description = Values.optionalString(yaml, "description", name + " command table", contextName);
-        String header = Values.outputFile(Values.optionalString(yaml, "header", name + ".h", contextName), ".h",
-                contextName + ".header");
-        String sourceFile = Values.outputFile(Values.optionalString(yaml, "source", name + ".c", contextName), ".c",
-                contextName + ".source");
-        List<String> includes = Values.stringList(yaml, "includes", contextName);
-        List<InterfaceSpec.Field> context = InterfaceSpec.parseFields(yaml, "context", contextName);
+        Values.CommonFields common = Values.commonFields(yaml, contextName, "command table");
+        String name = common.name();
 
         List<Map<String, Object>> commandItems = Values.mapList(yaml, "commands", contextName,
                 """
@@ -81,6 +75,7 @@ public record CommandTableSpec(
         Values.uniqueNames(commands.stream().map(command -> Integer.toString(command.opcode())).toList(),
                 contextName + ".commands (opcodes)");
 
-        return new CommandTableSpec(source, name, description, header, sourceFile, includes, context, List.copyOf(commands));
+        return new CommandTableSpec(source, name, common.description(), common.header(), common.sourceFile(),
+                common.includes(), common.context(), List.copyOf(commands));
     }
 }

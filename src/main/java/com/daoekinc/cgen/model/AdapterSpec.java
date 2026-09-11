@@ -28,19 +28,13 @@ public record AdapterSpec(
         if (!Values.requiredString(yaml, "kind", contextName).equals("adapter")) {
             throw new CGenException(contextName + ".kind must be adapter");
         }
-        String name = Values.identifier(Values.requiredString(yaml, "name", contextName), contextName + ".name");
-        String description = Values.optionalString(yaml, "description", name + " adapter", contextName);
-        String header = Values.outputFile(Values.optionalString(yaml, "header", name + ".h", contextName), ".h",
-                contextName + ".header");
-        String sourceFile = Values.outputFile(Values.optionalString(yaml, "source", name + ".c", contextName), ".c",
-                contextName + ".source");
-        List<String> includes = Values.stringList(yaml, "includes", contextName);
+        Values.CommonFields common = Values.commonFields(yaml, contextName, "adapter");
+        String name = common.name();
         String from = Values.identifier(Values.requiredString(yaml, "from", contextName), contextName + ".from");
         String to = Values.identifier(Values.requiredString(yaml, "to", contextName), contextName + ".to");
         if (from.equals(to)) {
             throw new CGenException(contextName + ".from and .to must reference different interfaces");
         }
-        List<InterfaceSpec.Field> context = InterfaceSpec.parseFields(yaml, "context", contextName);
 
         List<Mapping> mappings = new ArrayList<>();
         for (Map<String, Object> item : Values.mapList(yaml, "mappings", contextName,
@@ -55,7 +49,7 @@ public record AdapterSpec(
         }
         Values.uniqueNames(mappings.stream().map(Mapping::from).toList(), contextName + ".mappings (from)");
 
-        return new AdapterSpec(source, name, description, header, sourceFile, includes, from, to,
-                context, List.copyOf(mappings));
+        return new AdapterSpec(source, name, common.description(), common.header(), common.sourceFile(),
+                common.includes(), from, to, common.context(), List.copyOf(mappings));
     }
 }

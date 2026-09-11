@@ -15,14 +15,28 @@ import java.util.List;
 
 final class StateMachineRenderer {
     String renderHeader(ProjectConfig project, StateMachineSpec machine, DocumentationRenderer docs, UserRegions user) {
+        String guard = macro(machine.header());
+
         StringBuilder out = new StringBuilder();
+        appendHeaderTop(out, machine, docs, user, guard);
+        appendStateEnum(out, project, machine, docs);
+        appendHeaderContextStruct(out, project, machine);
+        appendCoreFunctionDeclarations(out, machine);
+        appendEventFunctionDeclarations(out, machine, docs);
+        appendHeaderBottom(out, user, guard);
+        return out.toString();
+    }
+
+    private static void appendHeaderTop(StringBuilder out, StateMachineSpec machine, DocumentationRenderer docs,
+                                        UserRegions user, String guard) {
         out.append(CGenTag.generatedFile("state-machine-header", machine.source().getFileName().toString())).append('\n');
         out.append(docs.file(machine.header(), machine.description())).append('\n');
-        String guard = macro(machine.header());
         out.append("#ifndef ").append(guard).append("\n#define ").append(guard).append("\n\n");
         appendIncludes(out, machine.includes());
         out.append(user.render("state-machine.header.preamble", "")).append('\n');
+    }
 
+    private static void appendStateEnum(StringBuilder out, ProjectConfig project, StateMachineSpec machine, DocumentationRenderer docs) {
         out.append(CGenTag.generatedItem("state-enum", machine.name())).append('\n');
         out.append(docs.type(machine.name() + "_state_t", "States of " + machine.name()));
         out.append("typedef enum\n{\n");
@@ -34,7 +48,9 @@ final class StateMachineRenderer {
             out.append('\n');
         }
         out.append("} ").append(machine.name()).append("_state_t;\n\n");
+    }
 
+    private static void appendHeaderContextStruct(StringBuilder out, ProjectConfig project, StateMachineSpec machine) {
         out.append(CGenTag.generatedItem("context", machine.name())).append('\n');
         out.append("typedef struct\n{\n").append(indent(project, 1)).append(machine.name()).append("_state_t state;\n");
         for (InterfaceSpec.Field field : machine.context()) {
@@ -43,7 +59,9 @@ final class StateMachineRenderer {
             out.append(";\n");
         }
         out.append("} ").append(machine.name()).append("_context_t;\n\n");
+    }
 
+    private static void appendCoreFunctionDeclarations(StringBuilder out, StateMachineSpec machine) {
         out.append(CGenTag.generatedItem("function", "init")).append('\n');
         out.append("void ").append(machine.name()).append("_init(").append(machine.name()).append("_context_t *context);\n\n");
 
@@ -53,7 +71,9 @@ final class StateMachineRenderer {
         out.append(CGenTag.generatedItem("function", "go_to_state")).append('\n');
         out.append("void ").append(machine.name()).append("_go_to_state(").append(machine.name()).append("_context_t *context, ")
                 .append(machine.name()).append("_state_t state);\n\n");
+    }
 
+    private static void appendEventFunctionDeclarations(StringBuilder out, StateMachineSpec machine, DocumentationRenderer docs) {
         for (StateMachineSpec.Event event : machine.events()) {
             out.append(CGenTag.generatedItem("function", "on_" + event.name())).append('\n');
             out.append(docs.function(machine.name() + "_on_" + event.name(), event.description(), "void", event.parameters()));
@@ -62,20 +82,35 @@ final class StateMachineRenderer {
             appendParameters(out, event.parameters(), true);
             out.append(");\n\n");
         }
+    }
+
+    private static void appendHeaderBottom(StringBuilder out, UserRegions user, String guard) {
         out.append(user.render("state-machine.header.footer", ""));
         out.append(user.renderOrphans());
         out.append("\n#endif /* ").append(guard).append(" */\n");
-        return out.toString();
     }
 
     String renderSource(ProjectConfig project, StateMachineSpec machine, DocumentationRenderer docs, UserRegions user) {
         StringBuilder out = new StringBuilder();
+        appendSourceTop(out, machine, docs, user);
+        appendEntryExitFunctions(out, project, machine, user);
+        appendInitFunction(out, project, machine);
+        appendTickFunction(out, project, machine, user);
+        appendGoToStateFunction(out, project, machine);
+        appendEventFunctions(out, project, machine, user);
+        appendSourceBottom(out, user);
+        return out.toString();
+    }
+
+    private static void appendSourceTop(StringBuilder out, StateMachineSpec machine, DocumentationRenderer docs, UserRegions user) {
         out.append(CGenTag.generatedFile("state-machine-source", machine.source().getFileName().toString())).append('\n');
         out.append(docs.file(machine.sourceFile(), machine.description())).append('\n');
         out.append("#include \"").append(machine.header()).append("\"\n");
         out.append("#include <stdbool.h>\n\n");
         out.append(user.render("state-machine.source.includes", "")).append('\n');
+    }
 
+    private static void appendEntryExitFunctions(StringBuilder out, ProjectConfig project, StateMachineSpec machine, UserRegions user) {
         for (StateMachineSpec.State state : machine.states()) {
             out.append(CGenTag.generatedItem("private-function", machine.name() + "_enter_" + state.name())).append('\n');
             out.append("static void ").append(machine.name()).append("_enter_").append(state.name())
@@ -91,13 +126,17 @@ final class StateMachineRenderer {
             out.append(user.render("state." + state.name() + ".exit", ""));
             out.append("}\n\n");
         }
+    }
 
+    private static void appendInitFunction(StringBuilder out, ProjectConfig project, StateMachineSpec machine) {
         out.append(CGenTag.generatedItem("function", "init")).append('\n');
         out.append("void ").append(machine.name()).append("_init(").append(machine.name()).append("_context_t *context)\n{\n")
                 .append(indent(project, 1)).append("context->state = ").append(stateConstant(machine, machine.initial())).append(";\n")
                 .append(indent(project, 1)).append(machine.name()).append("_enter_").append(machine.initial()).append("(context);\n")
                 .append("}\n\n");
+    }
 
+    private static void appendTickFunction(StringBuilder out, ProjectConfig project, StateMachineSpec machine, UserRegions user) {
         out.append(CGenTag.generatedItem("function", "tick")).append('\n');
         out.append("void ").append(machine.name()).append("_tick(").append(machine.name()).append("_context_t *context)\n{\n");
         out.append(indent(project, 1)).append("switch (context->state)\n").append(indent(project, 1)).append("{\n");
@@ -111,7 +150,9 @@ final class StateMachineRenderer {
         out.append(indent(project, 2)).append("default:\n").append(indent(project, 3)).append("break;\n");
         out.append(indent(project, 1)).append("}\n");
         out.append("}\n\n");
+    }
 
+    private static void appendGoToStateFunction(StringBuilder out, ProjectConfig project, StateMachineSpec machine) {
         out.append(CGenTag.generatedItem("function", "go_to_state")).append('\n');
         out.append("void ").append(machine.name()).append("_go_to_state(").append(machine.name()).append("_context_t *context, ")
                 .append(machine.name()).append("_state_t state)\n{\n");
@@ -133,7 +174,9 @@ final class StateMachineRenderer {
         out.append(indent(project, 2)).append("default:\n").append(indent(project, 3)).append("break;\n");
         out.append(indent(project, 1)).append("}\n");
         out.append("}\n\n");
+    }
 
+    private static void appendEventFunctions(StringBuilder out, ProjectConfig project, StateMachineSpec machine, UserRegions user) {
         for (StateMachineSpec.Event event : machine.events()) {
             List<StateMachineSpec.Transition> handled = machine.transitions().stream()
                     .filter(transition -> event.name().equals(transition.event())).toList();
@@ -159,9 +202,11 @@ final class StateMachineRenderer {
             out.append(indent(project, 1)).append("}\n");
             out.append("}\n\n");
         }
+    }
+
+    private static void appendSourceBottom(StringBuilder out, UserRegions user) {
         out.append(user.render("state-machine.source.footer", ""));
         out.append(user.renderOrphans());
-        return out.toString();
     }
 
     private static void appendTransitionCase(StringBuilder out, ProjectConfig project, StateMachineSpec machine,

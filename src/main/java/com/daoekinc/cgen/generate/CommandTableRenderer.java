@@ -14,14 +14,27 @@ import java.util.List;
 
 final class CommandTableRenderer {
     String renderHeader(ProjectConfig project, CommandTableSpec table, DocumentationRenderer docs, UserRegions user) {
+        String guard = macro(table.header());
+
         StringBuilder out = new StringBuilder();
+        appendHeaderTop(out, table, docs, user, guard);
+        appendCommandEnum(out, project, table, docs);
+        appendHeaderContextStruct(out, project, table);
+        appendDispatchDeclaration(out, table);
+        appendHeaderBottom(out, user, guard);
+        return out.toString();
+    }
+
+    private static void appendHeaderTop(StringBuilder out, CommandTableSpec table, DocumentationRenderer docs,
+                                        UserRegions user, String guard) {
         out.append(CGenTag.generatedFile("command-table-header", table.source().getFileName().toString())).append('\n');
         out.append(docs.file(table.header(), table.description())).append('\n');
-        String guard = macro(table.header());
         out.append("#ifndef ").append(guard).append("\n#define ").append(guard).append("\n\n");
         appendIncludes(out, List.of("<stdint.h>"), table.includes());
         out.append(user.render("command-table.header.preamble", "")).append('\n');
+    }
 
+    private static void appendCommandEnum(StringBuilder out, ProjectConfig project, CommandTableSpec table, DocumentationRenderer docs) {
         out.append(CGenTag.generatedItem("command-enum", table.name())).append('\n');
         out.append(docs.type(table.name() + "_command_t", "Commands of " + table.name()));
         out.append("typedef enum\n{\n");
@@ -34,7 +47,9 @@ final class CommandTableRenderer {
             out.append('\n');
         }
         out.append("} ").append(table.name()).append("_command_t;\n\n");
+    }
 
+    private static void appendHeaderContextStruct(StringBuilder out, ProjectConfig project, CommandTableSpec table) {
         out.append(CGenTag.generatedItem("context", table.name())).append('\n');
         out.append("typedef struct\n{\n");
         if (table.context().isEmpty()) {
@@ -47,24 +62,37 @@ final class CommandTableRenderer {
             }
         }
         out.append("} ").append(table.name()).append("_context_t;\n\n");
+    }
 
+    private static void appendDispatchDeclaration(StringBuilder out, CommandTableSpec table) {
         out.append(CGenTag.generatedItem("function", "dispatch")).append('\n');
         out.append("void ").append(table.name()).append("_dispatch(").append(table.name()).append("_context_t *context, ")
                 .append(table.name()).append("_command_t command, const uint8_t *payload, uint32_t length);\n\n");
+    }
 
+    private static void appendHeaderBottom(StringBuilder out, UserRegions user, String guard) {
         out.append(user.render("command-table.header.footer", ""));
         out.append(user.renderOrphans());
         out.append("\n#endif /* ").append(guard).append(" */\n");
-        return out.toString();
     }
 
     String renderSource(ProjectConfig project, CommandTableSpec table, DocumentationRenderer docs, UserRegions user) {
         StringBuilder out = new StringBuilder();
+        appendSourceTop(out, table, docs, user);
+        appendCommandHandlers(out, project, table, user);
+        appendDispatchFunction(out, project, table, user);
+        appendSourceBottom(out, user);
+        return out.toString();
+    }
+
+    private static void appendSourceTop(StringBuilder out, CommandTableSpec table, DocumentationRenderer docs, UserRegions user) {
         out.append(CGenTag.generatedFile("command-table-source", table.source().getFileName().toString())).append('\n');
         out.append(docs.file(table.sourceFile(), table.description())).append('\n');
         out.append("#include \"").append(table.header()).append("\"\n\n");
         out.append(user.render("command-table.source.includes", "")).append('\n');
+    }
 
+    private static void appendCommandHandlers(StringBuilder out, ProjectConfig project, CommandTableSpec table, UserRegions user) {
         for (CommandTableSpec.Command command : table.commands()) {
             out.append(CGenTag.generatedItem("private-function", table.name() + "_handle_" + command.name())).append('\n');
             out.append("static void ").append(table.name()).append("_handle_").append(command.name())
@@ -75,7 +103,9 @@ final class CommandTableRenderer {
             out.append(user.render("command." + command.name() + ".body", ""));
             out.append("}\n\n");
         }
+    }
 
+    private static void appendDispatchFunction(StringBuilder out, ProjectConfig project, CommandTableSpec table, UserRegions user) {
         out.append(CGenTag.generatedItem("function", "dispatch")).append('\n');
         out.append("void ").append(table.name()).append("_dispatch(").append(table.name()).append("_context_t *context, ")
                 .append(table.name()).append("_command_t command, const uint8_t *payload, uint32_t length)\n{\n");
@@ -92,10 +122,11 @@ final class CommandTableRenderer {
         out.append(indent(project, 2)).append("}\n");
         out.append(indent(project, 1)).append("}\n");
         out.append("}\n\n");
+    }
 
+    private static void appendSourceBottom(StringBuilder out, UserRegions user) {
         out.append(user.render("command-table.source.footer", ""));
         out.append(user.renderOrphans());
-        return out.toString();
     }
 
     private static String constant(CommandTableSpec table, String commandName) {

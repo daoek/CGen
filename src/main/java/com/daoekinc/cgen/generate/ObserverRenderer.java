@@ -17,20 +17,37 @@ import java.util.List;
 final class ObserverRenderer {
     String renderHeader(ProjectConfig project, ObserverSpec observer, InterfaceSpec listener,
                         DocumentationRenderer docs, UserRegions user) {
+        String guard = macro(observer.header());
+        String capacityMacro = capacityMacro(observer);
+
         StringBuilder out = new StringBuilder();
+        appendHeaderTop(out, observer, listener, docs, user, guard);
+        appendCapacityMacro(out, observer, capacityMacro);
+        appendHeaderContextStruct(out, project, observer, listener, capacityMacro);
+        appendCoreFunctionDeclarations(out, observer, listener);
+        appendPublishFunctionDeclarations(out, observer, listener, docs);
+        appendHeaderBottom(out, user, guard);
+        return out.toString();
+    }
+
+    private static void appendHeaderTop(StringBuilder out, ObserverSpec observer, InterfaceSpec listener,
+                                        DocumentationRenderer docs, UserRegions user, String guard) {
         out.append(CGenTag.generatedFile("observer-header", observer.source().getFileName().toString())).append('\n');
         out.append(docs.file(observer.header(), observer.description())).append('\n');
-        String guard = macro(observer.header());
         out.append("#ifndef ").append(guard).append("\n#define ").append(guard).append("\n\n");
         String listenerInclude = quotedRelative(observer.source().getParent(),
                 listener.source().getParent().resolve(listener.header()));
         appendIncludes(out, List.of("<stdbool.h>", "<stdint.h>", listenerInclude), observer.includes());
         out.append(user.render("observer.header.preamble", "")).append('\n');
+    }
 
-        String capacityMacro = observer.name().toUpperCase() + "_CAPACITY";
+    private static void appendCapacityMacro(StringBuilder out, ObserverSpec observer, String capacityMacro) {
         out.append(CGenTag.generatedItem("macro", capacityMacro)).append('\n');
         out.append("#define ").append(capacityMacro).append(" ").append(observer.capacity()).append("u\n\n");
+    }
 
+    private static void appendHeaderContextStruct(StringBuilder out, ProjectConfig project, ObserverSpec observer,
+                                                   InterfaceSpec listener, String capacityMacro) {
         out.append(CGenTag.generatedItem("context", observer.name())).append('\n');
         out.append("typedef struct\n{\n");
         out.append(indent(project, 1)).append("const ").append(listener.name()).append("_interface_t *subscribers[")
@@ -42,7 +59,9 @@ final class ObserverRenderer {
             out.append(";\n");
         }
         out.append("} ").append(observer.name()).append("_context_t;\n\n");
+    }
 
+    private static void appendCoreFunctionDeclarations(StringBuilder out, ObserverSpec observer, InterfaceSpec listener) {
         out.append(CGenTag.generatedItem("function", "init")).append('\n');
         out.append("void ").append(observer.name()).append("_init(").append(observer.name()).append("_context_t *context);\n\n");
 
@@ -53,7 +72,10 @@ final class ObserverRenderer {
         out.append(CGenTag.generatedItem("function", "unsubscribe")).append('\n');
         out.append("bool ").append(observer.name()).append("_unsubscribe(").append(observer.name())
                 .append("_context_t *context, const ").append(listener.name()).append("_interface_t *subscriber);\n\n");
+    }
 
+    private static void appendPublishFunctionDeclarations(StringBuilder out, ObserverSpec observer, InterfaceSpec listener,
+                                                           DocumentationRenderer docs) {
         for (InterfaceSpec.Function function : listener.functions()) {
             out.append(CGenTag.generatedItem("function", "publish_" + function.name())).append('\n');
             out.append(docs.function(observer.name() + "_publish_" + function.name(), function.description(), "void", function.parameters()));
@@ -62,28 +84,45 @@ final class ObserverRenderer {
             appendParameters(out, function.parameters(), true);
             out.append(");\n\n");
         }
+    }
+
+    private static void appendHeaderBottom(StringBuilder out, UserRegions user, String guard) {
         out.append(user.render("observer.header.footer", ""));
         out.append(user.renderOrphans());
         out.append("\n#endif /* ").append(guard).append(" */\n");
-        return out.toString();
     }
 
     String renderSource(ProjectConfig project, ObserverSpec observer, InterfaceSpec listener,
                         DocumentationRenderer docs, UserRegions user) {
+        String capacityMacro = capacityMacro(observer);
+
         StringBuilder out = new StringBuilder();
+        appendSourceTop(out, observer, docs, user);
+        appendInitFunction(out, project, observer);
+        appendSubscribeFunction(out, project, observer, listener, capacityMacro);
+        appendUnsubscribeFunction(out, project, observer, listener);
+        appendPublishFunctions(out, project, observer, listener);
+        appendSourceBottom(out, user);
+        return out.toString();
+    }
+
+    private static void appendSourceTop(StringBuilder out, ObserverSpec observer, DocumentationRenderer docs, UserRegions user) {
         out.append(CGenTag.generatedFile("observer-source", observer.source().getFileName().toString())).append('\n');
         out.append(docs.file(observer.sourceFile(), observer.description())).append('\n');
         out.append("#include \"").append(observer.header()).append("\"\n");
         out.append("#include <stddef.h>\n\n");
         out.append(user.render("observer.source.includes", "")).append('\n');
+    }
 
-        String capacityMacro = observer.name().toUpperCase() + "_CAPACITY";
-
+    private static void appendInitFunction(StringBuilder out, ProjectConfig project, ObserverSpec observer) {
         out.append(CGenTag.generatedItem("function", "init")).append('\n');
         out.append("void ").append(observer.name()).append("_init(").append(observer.name()).append("_context_t *context)\n{\n")
                 .append(indent(project, 1)).append("context->count = 0U;\n")
                 .append("}\n\n");
+    }
 
+    private static void appendSubscribeFunction(StringBuilder out, ProjectConfig project, ObserverSpec observer,
+                                                InterfaceSpec listener, String capacityMacro) {
         out.append(CGenTag.generatedItem("function", "subscribe")).append('\n');
         out.append("bool ").append(observer.name()).append("_subscribe(").append(observer.name())
                 .append("_context_t *context, const ").append(listener.name()).append("_interface_t *subscriber)\n{\n");
@@ -108,7 +147,9 @@ final class ObserverRenderer {
         out.append(indent(project, 1)).append("}\n\n");
         out.append(indent(project, 1)).append("return cgen_result;\n");
         out.append("}\n\n");
+    }
 
+    private static void appendUnsubscribeFunction(StringBuilder out, ProjectConfig project, ObserverSpec observer, InterfaceSpec listener) {
         out.append(CGenTag.generatedItem("function", "unsubscribe")).append('\n');
         out.append("bool ").append(observer.name()).append("_unsubscribe(").append(observer.name())
                 .append("_context_t *context, const ").append(listener.name()).append("_interface_t *subscriber)\n{\n");
@@ -126,7 +167,9 @@ final class ObserverRenderer {
         out.append(indent(project, 1)).append("}\n\n");
         out.append(indent(project, 1)).append("return cgen_result;\n");
         out.append("}\n\n");
+    }
 
+    private static void appendPublishFunctions(StringBuilder out, ProjectConfig project, ObserverSpec observer, InterfaceSpec listener) {
         for (InterfaceSpec.Function function : listener.functions()) {
             out.append(CGenTag.generatedItem("function", "publish_" + function.name())).append('\n');
             out.append("void ").append(observer.name()).append("_publish_").append(function.name())
@@ -145,8 +188,14 @@ final class ObserverRenderer {
             out.append(indent(project, 1)).append("}\n");
             out.append("}\n\n");
         }
+    }
+
+    private static void appendSourceBottom(StringBuilder out, UserRegions user) {
         out.append(user.render("observer.source.footer", ""));
         out.append(user.renderOrphans());
-        return out.toString();
+    }
+
+    private static String capacityMacro(ObserverSpec observer) {
+        return observer.name().toUpperCase() + "_CAPACITY";
     }
 }

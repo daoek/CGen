@@ -93,16 +93,7 @@ public final class CGenCli {
         }
         ProjectConfig project = projects.findAndLoad(workingDirectory);
         if (args[1].equals("interface")) {
-            Path directory;
-            if (args.length == 3) {
-                directory = workingDirectory;
-            } else if (args.length == 4) {
-                directory = resolveDirectory(args[3]);
-            } else if (args.length == 5 && args[3].equals("--dir")) {
-                directory = resolveDirectory(args[4]);
-            } else {
-                throw new CGenException("Usage: CGen create interface <name> [directory]");
-            }
+            Path directory = parseSimpleDirectory(args, "Usage: CGen create interface <name> [directory]");
             out.println("Created " + projects.createInterface(project, args[2], directory));
             return 0;
         }
@@ -132,44 +123,17 @@ public final class CGenCli {
             return 0;
         }
         if (args[1].equals("state-machine")) {
-            Path directory;
-            if (args.length == 3) {
-                directory = workingDirectory;
-            } else if (args.length == 4) {
-                directory = resolveDirectory(args[3]);
-            } else if (args.length == 5 && args[3].equals("--dir")) {
-                directory = resolveDirectory(args[4]);
-            } else {
-                throw new CGenException("Usage: CGen create state-machine <name> [directory]");
-            }
+            Path directory = parseSimpleDirectory(args, "Usage: CGen create state-machine <name> [directory]");
             out.println("Created " + projects.createStateMachine(project, args[2], directory));
             return 0;
         }
         if (args[1].equals("command-table")) {
-            Path directory;
-            if (args.length == 3) {
-                directory = workingDirectory;
-            } else if (args.length == 4) {
-                directory = resolveDirectory(args[3]);
-            } else if (args.length == 5 && args[3].equals("--dir")) {
-                directory = resolveDirectory(args[4]);
-            } else {
-                throw new CGenException("Usage: CGen create command-table <name> [directory]");
-            }
+            Path directory = parseSimpleDirectory(args, "Usage: CGen create command-table <name> [directory]");
             out.println("Created " + projects.createCommandTable(project, args[2], directory));
             return 0;
         }
         if (args[1].equals("status-codes")) {
-            Path directory;
-            if (args.length == 3) {
-                directory = workingDirectory;
-            } else if (args.length == 4) {
-                directory = resolveDirectory(args[3]);
-            } else if (args.length == 5 && args[3].equals("--dir")) {
-                directory = resolveDirectory(args[4]);
-            } else {
-                throw new CGenException("Usage: CGen create status-codes <name> [directory]");
-            }
+            Path directory = parseSimpleDirectory(args, "Usage: CGen create status-codes <name> [directory]");
             out.println("Created " + projects.createStatusCodes(project, args[2], directory));
             return 0;
         }
@@ -298,6 +262,19 @@ public final class CGenCli {
 
     private Path resolveDirectory(String value) {
         return workingDirectory.resolve(value).normalize();
+    }
+
+    private Path parseSimpleDirectory(String[] args, String usage) {
+        if (args.length == 3) {
+            return workingDirectory;
+        }
+        if (args.length == 4) {
+            return resolveDirectory(args[3]);
+        }
+        if (args.length == 5 && args[3].equals("--dir")) {
+            return resolveDirectory(args[4]);
+        }
+        throw new CGenException(usage);
     }
 
     private static void usage(PrintStream stream) {

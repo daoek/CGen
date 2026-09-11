@@ -18,7 +18,7 @@ public record ProjectConfig(
 
     public static ProjectConfig from(Path file, Map<String, Object> yaml) {
         String context = file.toString();
-        Values.onlyKeys(yaml, context, "schema", "name", "version", "paths", "documentation", "format");
+        Values.onlyKeys(yaml, context, "schema", "name", "version", "documentation", "format");
         int schema = Values.optionalInt(yaml, "schema", 1, context);
         if (schema != 1) {
             throw new CGenException(context + " uses unsupported schema " + schema);
@@ -26,10 +26,6 @@ public record ProjectConfig(
         Path root = file.toAbsolutePath().normalize().getParent();
         String name = Values.requiredString(yaml, "name", context);
         String version = Values.requiredString(yaml, "version", context);
-
-        // Accepted for compatibility with early project files; placement is now command-scoped.
-        Map<String, Object> paths = Values.optionalMap(yaml, "paths", context);
-        Values.onlyKeys(paths, context + ".paths", "interfaces", "modules");
 
         Map<String, Object> docs = Values.optionalMap(yaml, "documentation", context);
         Values.onlyKeys(docs, context + ".documentation", "style", "file");

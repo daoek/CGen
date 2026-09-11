@@ -6,6 +6,7 @@ import com.daoekinc.cgen.model.InterfaceSpec;
 import com.daoekinc.cgen.model.ProjectConfig;
 import java.nio.file.Files;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 final class DocumentationRenderer {
@@ -47,7 +48,7 @@ final class DocumentationRenderer {
         return "/**\n * @file " + file + "\n * @brief " + brief + "\n */\n";
     }
 
-    String function(String name, String brief, String returnType, java.util.List<InterfaceSpec.Parameter> parameters) {
+    String function(String name, String brief, String returnType, List<InterfaceSpec.Parameter> parameters) {
         if (style.equals("none")) {
             return "";
         }

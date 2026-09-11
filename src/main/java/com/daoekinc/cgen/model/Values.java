@@ -159,6 +159,20 @@ final class Values {
         return result;
     }
 
+    record CommonFields(String name, String description, String header, String sourceFile,
+                        List<String> includes, List<InterfaceSpec.Field> context) {
+    }
+
+    static CommonFields commonFields(Map<String, Object> yaml, String contextName, String kindLabel) {
+        String name = identifier(requiredString(yaml, "name", contextName), contextName + ".name");
+        String description = optionalString(yaml, "description", name + " " + kindLabel, contextName);
+        String header = outputFile(optionalString(yaml, "header", name + ".h", contextName), ".h", contextName + ".header");
+        String sourceFile = outputFile(optionalString(yaml, "source", name + ".c", contextName), ".c", contextName + ".source");
+        List<String> includes = stringList(yaml, "includes", contextName);
+        List<InterfaceSpec.Field> context = InterfaceSpec.parseFields(yaml, "context", contextName);
+        return new CommonFields(name, description, header, sourceFile, includes, context);
+    }
+
     static Map<String, Object> compactField(String text, String context) {
         String trimmed = text.strip();
         int splitIndex = -1;

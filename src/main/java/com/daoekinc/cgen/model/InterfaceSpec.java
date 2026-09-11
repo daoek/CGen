@@ -91,22 +91,7 @@ public record InterfaceSpec(
             Values.onlyKeys(item, itemContext, "name", "return", "description", "parameters", "invalidReturn", "uninitializedReturn");
             String functionName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
             String returnType = oneLine(Values.optionalString(item, "return", "void", itemContext), itemContext + ".return");
-            List<Parameter> parameters = new ArrayList<>();
-            List<Map<String, Object>> parameterItems = Values.itemList(item, "parameters", itemContext,
-                    """
-                    parameters:
-                      - uint8_t *buffer
-                      - uint32_t len""", text -> Values.compactField(text, itemContext + ".parameters"));
-            for (int parameterIndex = 0; parameterIndex < parameterItems.size(); parameterIndex++) {
-                Map<String, Object> parameter = parameterItems.get(parameterIndex);
-                String parameterContext = itemContext + ".parameters[" + parameterIndex + "]";
-                Values.onlyKeys(parameter, parameterContext, "type", "name", "description");
-                parameters.add(new Parameter(
-                        oneLine(Values.requiredString(parameter, "type", parameterContext), parameterContext + ".type"),
-                        Values.identifier(Values.requiredString(parameter, "name", parameterContext), parameterContext + ".name"),
-                        Values.optionalString(parameter, "description", "", parameterContext)));
-            }
-            Values.uniqueNames(parameters.stream().map(Parameter::name).toList(), itemContext + " function " + functionName);
+            List<Parameter> parameters = parseParameters(item, "parameters", itemContext, "function " + functionName);
             String functionInvalidReturn = Values.optionalString(item, "invalidReturn", invalidReturn, itemContext);
             if (!returnType.equals("void") && functionInvalidReturn == null) {
                 throw new CGenException(itemContext + ".invalidReturn is required for non-void function '" + functionName + "'",
@@ -143,6 +128,26 @@ public record InterfaceSpec(
         }
         Values.uniqueNames(fields.stream().map(Field::name).toList(), context + "." + key);
         return List.copyOf(fields);
+    }
+
+    static List<Parameter> parseParameters(Map<String, Object> item, String key, String itemContext, String uniqueLabel) {
+        List<Parameter> parameters = new ArrayList<>();
+        List<Map<String, Object>> parameterItems = Values.itemList(item, key, itemContext,
+                """
+                parameters:
+                  - uint8_t *buffer
+                  - uint32_t len""", text -> Values.compactField(text, itemContext + "." + key));
+        for (int parameterIndex = 0; parameterIndex < parameterItems.size(); parameterIndex++) {
+            Map<String, Object> parameter = parameterItems.get(parameterIndex);
+            String parameterContext = itemContext + "." + key + "[" + parameterIndex + "]";
+            Values.onlyKeys(parameter, parameterContext, "type", "name", "description");
+            parameters.add(new Parameter(
+                    oneLine(Values.requiredString(parameter, "type", parameterContext), parameterContext + ".type"),
+                    Values.identifier(Values.requiredString(parameter, "name", parameterContext), parameterContext + ".name"),
+                    Values.optionalString(parameter, "description", "", parameterContext)));
+        }
+        Values.uniqueNames(parameters.stream().map(Parameter::name).toList(), itemContext + " " + uniqueLabel);
+        return List.copyOf(parameters);
     }
 
     static String oneLine(String value, String context) {

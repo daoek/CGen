@@ -33,17 +33,11 @@ public record ModuleSpec(
         if (!Values.requiredString(yaml, "kind", contextName).equals("module")) {
             throw new CGenException(contextName + ".kind must be module");
         }
-        String name = Values.identifier(Values.requiredString(yaml, "name", contextName), contextName + ".name");
-        String description = Values.optionalString(yaml, "description", name + " module", contextName);
-        String header = Values.outputFile(Values.optionalString(yaml, "header", name + ".h", contextName), ".h",
-                contextName + ".header");
-        String sourceFile = Values.outputFile(Values.optionalString(yaml, "source", name + ".c", contextName), ".c",
-                contextName + ".source");
+        Values.CommonFields common = Values.commonFields(yaml, contextName, "module");
+        String name = common.name();
         List<String> implemented = Values.stringList(yaml, "implements", contextName).stream()
                 .map(value -> Values.identifier(value, contextName + ".implements")).toList();
         Values.uniqueNames(implemented, contextName + ".implements");
-        List<String> includes = Values.stringList(yaml, "includes", contextName);
-        List<InterfaceSpec.Field> fields = InterfaceSpec.parseFields(yaml, "context", contextName);
 
         List<Variable> variables = new ArrayList<>();
         List<Map<String, Object>> variableItems = Values.itemList(yaml, "variables", contextName,
@@ -73,7 +67,7 @@ public record ModuleSpec(
         }
         Values.uniqueNames(variables.stream().map(Variable::name).toList(), contextName + ".variables");
         boolean singleton = Boolean.parseBoolean(Values.optionalString(yaml, "singleton", "false", contextName));
-        return new ModuleSpec(source, name, description, header, sourceFile, List.copyOf(implemented), includes,
-                fields, List.copyOf(variables), singleton);
+        return new ModuleSpec(source, name, common.description(), common.header(), common.sourceFile(),
+                List.copyOf(implemented), common.includes(), common.context(), List.copyOf(variables), singleton);
     }
 }

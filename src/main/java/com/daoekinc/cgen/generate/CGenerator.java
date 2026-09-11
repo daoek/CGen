@@ -164,60 +164,43 @@ public final class CGenerator {
         List<Path> cleaned = new ArrayList<>();
         for (InterfaceSpec spec : loadInterfaces(project).values()) {
             if (spec.source().startsWith(scope)) {
-                Path header = spec.source().getParent().resolve(spec.header());
-                if (Files.isRegularFile(header) && tags.stripTags(header)) {
-                    cleaned.add(header);
-                }
+                cleanOutputs(spec.source().getParent(), List.of(spec.header()), cleaned);
             }
         }
         for (Path path : specificationFiles(scope, ".module.yaml", project)) {
             ModuleSpec module = ModuleSpec.from(path, yamlFiles.load(path));
-            for (Path output : List.of(path.getParent().resolve(module.header()), path.getParent().resolve(module.sourceFile()))) {
-                if (Files.isRegularFile(output) && tags.stripTags(output)) {
-                    cleaned.add(output);
-                }
-            }
+            cleanOutputs(path.getParent(), List.of(module.header(), module.sourceFile()), cleaned);
         }
         for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
             StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
-            for (Path output : List.of(path.getParent().resolve(machine.header()), path.getParent().resolve(machine.sourceFile()))) {
-                if (Files.isRegularFile(output) && tags.stripTags(output)) {
-                    cleaned.add(output);
-                }
-            }
+            cleanOutputs(path.getParent(), List.of(machine.header(), machine.sourceFile()), cleaned);
         }
         for (Path path : specificationFiles(scope, ".status-codes.yaml", project)) {
             StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));
-            Path header = path.getParent().resolve(status.header());
-            if (Files.isRegularFile(header) && tags.stripTags(header)) {
-                cleaned.add(header);
-            }
+            cleanOutputs(path.getParent(), List.of(status.header()), cleaned);
         }
         for (Path path : specificationFiles(scope, ".observer.yaml", project)) {
             ObserverSpec observer = ObserverSpec.from(path, yamlFiles.load(path));
-            for (Path output : List.of(path.getParent().resolve(observer.header()), path.getParent().resolve(observer.sourceFile()))) {
-                if (Files.isRegularFile(output) && tags.stripTags(output)) {
-                    cleaned.add(output);
-                }
-            }
+            cleanOutputs(path.getParent(), List.of(observer.header(), observer.sourceFile()), cleaned);
         }
         for (Path path : specificationFiles(scope, ".command-table.yaml", project)) {
             CommandTableSpec table = CommandTableSpec.from(path, yamlFiles.load(path));
-            for (Path output : List.of(path.getParent().resolve(table.header()), path.getParent().resolve(table.sourceFile()))) {
-                if (Files.isRegularFile(output) && tags.stripTags(output)) {
-                    cleaned.add(output);
-                }
-            }
+            cleanOutputs(path.getParent(), List.of(table.header(), table.sourceFile()), cleaned);
         }
         for (Path path : specificationFiles(scope, ".adapter.yaml", project)) {
             AdapterSpec adapter = AdapterSpec.from(path, yamlFiles.load(path));
-            for (Path output : List.of(path.getParent().resolve(adapter.header()), path.getParent().resolve(adapter.sourceFile()))) {
-                if (Files.isRegularFile(output) && tags.stripTags(output)) {
-                    cleaned.add(output);
-                }
-            }
+            cleanOutputs(path.getParent(), List.of(adapter.header(), adapter.sourceFile()), cleaned);
         }
         return List.copyOf(cleaned);
+    }
+
+    private void cleanOutputs(Path specDirectory, List<String> outputFileNames, List<Path> cleaned) {
+        for (String fileName : outputFileNames) {
+            Path output = specDirectory.resolve(fileName);
+            if (Files.isRegularFile(output) && tags.stripTags(output)) {
+                cleaned.add(output);
+            }
+        }
     }
 
     public DetachResult detach(ProjectConfig project) {

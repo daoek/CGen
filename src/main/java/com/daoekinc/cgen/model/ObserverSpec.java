@@ -23,20 +23,15 @@ public record ObserverSpec(
         if (!Values.requiredString(yaml, "kind", contextName).equals("observer")) {
             throw new CGenException(contextName + ".kind must be observer");
         }
-        String name = Values.identifier(Values.requiredString(yaml, "name", contextName), contextName + ".name");
-        String description = Values.optionalString(yaml, "description", name + " observer", contextName);
-        String header = Values.outputFile(Values.optionalString(yaml, "header", name + ".h", contextName), ".h",
-                contextName + ".header");
-        String sourceFile = Values.outputFile(Values.optionalString(yaml, "source", name + ".c", contextName), ".c",
-                contextName + ".source");
-        List<String> includes = Values.stringList(yaml, "includes", contextName);
+        Values.CommonFields common = Values.commonFields(yaml, contextName, "observer");
+        String name = common.name();
         String interfaceName = Values.identifier(Values.requiredString(yaml, "interface", contextName), contextName + ".interface");
         int capacity = Values.optionalInt(yaml, "capacity", 8, contextName);
         if (capacity < 1) {
             throw new CGenException(contextName + ".capacity must be at least 1");
         }
-        List<InterfaceSpec.Field> context = InterfaceSpec.parseFields(yaml, "context", contextName);
 
-        return new ObserverSpec(source, name, description, header, sourceFile, includes, interfaceName, capacity, context);
+        return new ObserverSpec(source, name, common.description(), common.header(), common.sourceFile(),
+                common.includes(), interfaceName, capacity, common.context());
     }
 }
