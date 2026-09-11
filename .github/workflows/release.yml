@@ -28,7 +28,8 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
 
       - name: Set project version
-        run: mvn -B -DnewVersion=${{ steps.version.outputs.version }} -DgenerateBackupPoms=false versions:set
+        shell: pwsh
+        run: mvn -B "-DnewVersion=${{ steps.version.outputs.version }}" -DgenerateBackupPoms=false versions:set
 
       - name: Build and test
         run: mvn -B clean verify
