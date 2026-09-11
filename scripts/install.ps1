@@ -1,6 +1,24 @@
+<#
+    Installs CGen into a per-user directory (default %LOCALAPPDATA%\CGen). No admin rights
+    are required and nothing outside the install directory is touched, other than adding that
+    directory to the current user's PATH.
+
+    Two modes:
+      - Pass -Version <tag> (e.g. "1.2.0") to download that published release's jar and
+        SHA256SUMS from GitHub over HTTPS, verify the checksum, and install only if it matches.
+        Nothing is written to the install directory if verification fails.
+      - Omit -Version to build from the local checkout instead (`mvn clean package`), which is
+        what the "CGen: Package + Install" VS Code task and contributors use.
+
+    A note on -ExecutionPolicy Bypass, since it shows up in the recommended invocation: that
+    flag scopes to the single powershell.exe process it's passed to. It does not change the
+    machine's or the current user's execution policy - running this script that way leaves
+    every other script on the machine subject to whatever policy was already in effect.
+#>
 [CmdletBinding()]
 param(
     [string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'CGen'),
+    [string]$Version,
     [switch]$SkipBuild,
     [switch]$SkipPathUpdate
 )
@@ -8,7 +26,12 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+if ($Version -and $SkipBuild) {
+    throw '-Version and -SkipBuild are mutually exclusive: -Version installs a downloaded release and never builds locally.'
+}
+
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
+$repositorySlug = 'daoek/CGen'
 $resolvedInstallDirectory = [System.IO.Path]::GetFullPath($InstallDirectory)
 $pathRoot = [System.IO.Path]::GetPathRoot($resolvedInstallDirectory)
 $markerName = '.cgen-install-marker'
@@ -27,28 +50,74 @@ if (Test-Path -LiteralPath $resolvedInstallDirectory) {
     }
 }
 
-if (-not $SkipBuild) {
-    $maven = Get-Command mvn.cmd -ErrorAction SilentlyContinue
-    if ($null -eq $maven) {
-        throw 'Maven (mvn.cmd) was not found on PATH.'
+function Assert-Sha256Match {
+    # Verifies $FilePath's SHA-256 against the entry for $FileName in a SHA256SUMS file
+    # (the standard "<hash>  <filename>" format). Throws - and installs nothing - on any
+    # mismatch or missing entry, so a corrupted or tampered download never gets installed.
+    param(
+        [Parameter(Mandatory)] [string]$FilePath,
+        [Parameter(Mandatory)] [string]$FileName,
+        [Parameter(Mandatory)] [string]$Sha256SumsPath
+    )
+    $expectedLine = Get-Content -LiteralPath $Sha256SumsPath |
+        Where-Object { $_ -match ('^\s*[0-9a-fA-F]{64}\s+\*?' + [regex]::Escape($FileName) + '\s*$') } |
+        Select-Object -First 1
+    if (-not $expectedLine) {
+        throw "No checksum entry for '$FileName' found in $Sha256SumsPath"
     }
-    # Clean first so Shade never consumes a JAR that was already shaded by a prior build.
-    & $maven.Source -f (Join-Path $repositoryRoot 'pom.xml') clean package
-    if ($LASTEXITCODE -ne 0) {
-        throw "Maven build failed with exit code $LASTEXITCODE"
+    $expectedHash = ($expectedLine.Trim() -split '\s+')[0].ToLowerInvariant()
+    $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath $FilePath).Hash.ToLowerInvariant()
+    if ($actualHash -ne $expectedHash) {
+        throw "Checksum mismatch for '$FileName': expected $expectedHash, got $actualHash. Refusing to install."
     }
+    Write-Output "Checksum verified for $FileName ($actualHash)"
 }
 
-$jarCandidates = @(Get-ChildItem -File -LiteralPath (Join-Path $repositoryRoot 'target') -Filter 'cgen-*.jar' |
-    Where-Object { $_.Name -notlike 'original-*' -and $_.Name -notlike '*-sources.jar' -and $_.Name -notlike '*-javadoc.jar' } |
-    Sort-Object LastWriteTimeUtc -Descending)
-if ($jarCandidates.Count -eq 0) {
-    throw "No packaged CGen JAR found. Run without -SkipBuild first."
+if ($Version) {
+    $tag = if ($Version.StartsWith('v')) { $Version } else { "v$Version" }
+    $bareVersion = $tag.TrimStart('v')
+    $jarName = "cgen-$bareVersion.jar"
+    $releaseBaseUrl = "https://github.com/$repositorySlug/releases/download/$tag"
+
+    $downloadDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "cgen-install-$tag"
+    New-Item -ItemType Directory -Force -Path $downloadDirectory | Out-Null
+    $downloadedJar = Join-Path $downloadDirectory $jarName
+    $downloadedSums = Join-Path $downloadDirectory 'SHA256SUMS'
+
+    Write-Output "Downloading $jarName from release $tag..."
+    try {
+        Invoke-WebRequest -Uri "$releaseBaseUrl/$jarName" -OutFile $downloadedJar -UseBasicParsing
+        Invoke-WebRequest -Uri "$releaseBaseUrl/SHA256SUMS" -OutFile $downloadedSums -UseBasicParsing
+    } catch {
+        throw "Could not download release '$tag' from https://github.com/$repositorySlug/releases: $($_.Exception.Message)"
+    }
+    Assert-Sha256Match -FilePath $downloadedJar -FileName $jarName -Sha256SumsPath $downloadedSums
+    $sourceJarPath = $downloadedJar
+} else {
+    if (-not $SkipBuild) {
+        $maven = Get-Command mvn.cmd -ErrorAction SilentlyContinue
+        if ($null -eq $maven) {
+            throw 'Maven (mvn.cmd) was not found on PATH.'
+        }
+        # Clean first so Shade never consumes a JAR that was already shaded by a prior build.
+        & $maven.Source -f (Join-Path $repositoryRoot 'pom.xml') clean package
+        if ($LASTEXITCODE -ne 0) {
+            throw "Maven build failed with exit code $LASTEXITCODE"
+        }
+    }
+
+    $jarCandidates = @(Get-ChildItem -File -LiteralPath (Join-Path $repositoryRoot 'target') -Filter 'cgen-*.jar' |
+        Where-Object { $_.Name -notlike 'original-*' -and $_.Name -notlike '*-sources.jar' -and $_.Name -notlike '*-javadoc.jar' } |
+        Sort-Object LastWriteTimeUtc -Descending)
+    if ($jarCandidates.Count -eq 0) {
+        throw "No packaged CGen JAR found. Run without -SkipBuild first."
+    }
+    $sourceJarPath = $jarCandidates[0].FullName
 }
 
 New-Item -ItemType Directory -Force -Path $resolvedInstallDirectory | Out-Null
 $temporaryJar = Join-Path $resolvedInstallDirectory 'cgen.jar.new'
-Copy-Item -Force -LiteralPath $jarCandidates[0].FullName -Destination $temporaryJar
+Copy-Item -Force -LiteralPath $sourceJarPath -Destination $temporaryJar
 Move-Item -Force -LiteralPath $temporaryJar -Destination (Join-Path $resolvedInstallDirectory 'cgen.jar')
 Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot 'CGen.cmd') -Destination (Join-Path $resolvedInstallDirectory 'CGen.cmd')
 Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot $markerName) -Destination $markerPath
@@ -69,7 +138,9 @@ if (-not $SkipPathUpdate) {
     }
 }
 
+$installedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $resolvedInstallDirectory 'cgen.jar')).Hash.ToLowerInvariant()
 Write-Output "CGen installed in $resolvedInstallDirectory"
+Write-Output "Installed jar SHA256: $installedHash"
 if (-not $SkipPathUpdate) {
     Write-Output 'Open a new terminal, then run: CGen --help'
 }

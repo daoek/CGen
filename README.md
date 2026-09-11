@@ -19,25 +19,62 @@ dependency directory.
 
 ### Install the `CGen` command on Windows
 
-From the repository root, run:
+Two ways to install, depending on whether you want a published build or your
+own local build.
+
+**Install a release (recommended for most people).** Every version tag is
+built and tested by [CI](.github/workflows/release.yml) and published as a
+[GitHub Release](https://github.com/daoek/CGen/releases) with the jar and a
+`SHA256SUMS` checksum file attached — you don't need Java, Maven, or a clone
+of this repo to install it. Grab `scripts/install.ps1` (e.g. from the
+[repo's raw source](https://github.com/daoek/CGen/raw/main/scripts/install.ps1))
+and run:
+
+```powershell
+.\install.ps1 -Version 1.2.0
+```
+
+This downloads that release's jar and `SHA256SUMS` over HTTPS from GitHub,
+verifies the jar's SHA-256 against the published checksum, and only installs
+it if the checksum matches — nothing is written to disk otherwise. It prints
+the installed jar's checksum at the end so you can cross-check it by hand
+against the `SHA256SUMS` file on the [Releases page](https://github.com/daoek/CGen/releases)
+if you'd rather not take the script's word for it.
+
+**Build and install from source (for contributors).** From the repository
+root, run:
 
 ```powershell
 .\scripts\install.ps1
 ```
 
-This builds CGen, installs a private copy in `%LOCALAPPDATA%\CGen`, and adds
-that directory to your user `PATH`. Open a new terminal afterward:
+This builds CGen locally (`mvn clean package`) instead of downloading
+anything, then installs it the same way. In VS Code, press `Ctrl+Shift+B` and
+run the default `CGen: Package + Install` task to rebuild, test, package, and
+update the installed command in one step.
+
+**Either way**, the install:
+- Runs entirely as your user — no admin rights needed.
+- Only ever writes inside `%LOCALAPPDATA%\CGen` (or wherever you pass to
+  `-InstallDirectory`) and adds that one directory to your user `PATH`.
+- Is marker-gated: it refuses to overwrite a directory it didn't create
+  itself, and `Uninstall-CGen.ps1` refuses to remove anything without that
+  same marker present.
+- If your machine's default execution policy blocks running a local `.ps1`
+  directly, run it as `powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version 1.2.0`
+  instead (this is also what the VS Code task does). That flag scopes to the
+  one `powershell.exe` invocation it's passed to — it doesn't change your
+  machine's or user's execution policy for anything else.
+
+Open a new terminal after installing:
 
 ```console
 CGen --help
 ```
 
-In VS Code, press `Ctrl+Shift+B` and run the default
-`CGen: Package + Install` task to rebuild, test, package, and update the
-installed command in one step.
-
-The installed copy is independent from `target`, so `mvn clean` will not remove
-it. Re-run the installer to update it. To uninstall safely:
+The installed copy is independent from `target`, so `mvn clean` will not
+remove it. Re-run the installer (either mode) to update it. To uninstall
+safely:
 
 ```powershell
 & "$env:LOCALAPPDATA\CGen\Uninstall-CGen.ps1"

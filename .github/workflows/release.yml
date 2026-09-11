@@ -1,0 +1,53 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Derive version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart('v')
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+
+      - name: Set project version
+        run: mvn -B -DnewVersion=${{ steps.version.outputs.version }} -DgenerateBackupPoms=false versions:set
+
+      - name: Build and test
+        run: mvn -B clean verify
+
+      - name: Compute checksum
+        shell: pwsh
+        run: |
+          $jar = Get-ChildItem -File -Path target -Filter 'cgen-*.jar' |
+              Where-Object { $_.Name -notlike 'original-*' -and $_.Name -notlike '*-sources.jar' -and $_.Name -notlike '*-javadoc.jar' } |
+              Select-Object -First 1
+          $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $jar.FullName).Hash.ToLower()
+          "$hash  $($jar.Name)" | Out-File -FilePath (Join-Path target 'SHA256SUMS') -Encoding utf8 -NoNewline
+          "`n" | Out-File -FilePath (Join-Path target 'SHA256SUMS') -Encoding utf8 -Append -NoNewline
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            target/cgen-*.jar
+            target/SHA256SUMS
+          fail_on_unmatched_files: true
+          generate_release_notes: true
