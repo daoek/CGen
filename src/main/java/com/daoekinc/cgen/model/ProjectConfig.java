@@ -1,6 +1,7 @@
 package com.daoekinc.cgen.model;
 
 import com.daoekinc.cgen.CGenException;
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.Map;
 
@@ -23,7 +24,17 @@ public record ProjectConfig(
         if (schema != 1) {
             throw new CGenException(context + " uses unsupported schema " + schema);
         }
-        Path root = file.toAbsolutePath().normalize().getParent();
+        Path root;
+        try {
+            // Canonicalize once here so every downstream comparison against project.root()
+            // (ProjectService.existingDirectory/safeDirectory, the interface-vs-scope filter
+            // in CGenerator.generate()) uses the same representation - on Windows, a raw
+            // toAbsolutePath().normalize() can retain an 8.3 short name (e.g. RUNNER~1 on
+            // GitHub Actions runners) that no longer string-prefix-matches a realpath'd scope.
+            root = file.toAbsolutePath().normalize().getParent().toRealPath();
+        } catch (IOException exception) {
+            throw new CGenException("Cannot resolve project root for " + file + ": " + exception.getMessage(), exception);
+        }
         String name = Values.requiredString(yaml, "name", context);
         String version = Values.requiredString(yaml, "version", context);
 
