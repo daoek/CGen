@@ -229,6 +229,35 @@ you can override in `transition.<from>.<event>.guard`; a `false` guard or a
 state/event combination with no matching transition both fall through to
 `event.<EVENT>.unhandled`.
 
+Every state machine also gets a `<name>_tick(context)` and a
+`<name>_go_to_state(context, state)`:
+
+```c
+void door_tick(door_context_t *context);
+void door_go_to_state(door_context_t *context, door_state_t state);
+```
+
+Call `door_tick()` on every iteration of your main loop. It switches on the
+current state into a per-state user region — `state.<STATE>.tick` — where you
+write whatever runs on every tick while in that state: polling, timers,
+sensor reads, and conditional moves to another state, all in plain C:
+
+```c
+/*@CGen(+state.RUNNING.tick)*/
+if (getMotorSpeed() > 100.0f)
+{
+    door_go_to_state(context, DOOR_STATE_FAULT);
+}
+/*@CGen(-state.RUNNING.tick)*/
+```
+
+`door_go_to_state()` is the generic transition primitive underneath: it runs
+the current state's exit hook, assigns the new state, then runs the target
+state's entry hook — for any state, not just ones with a declared
+`transitions` entry. It's generated once, mechanically, with no user region
+of its own; `transitions`/`events` stay exactly as above for transitions that
+should only happen in reaction to a specific event.
+
 ## Observer YAML
 
 Fans a single call out to every subscriber implementing an existing

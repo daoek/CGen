@@ -47,6 +47,13 @@ final class StateMachineRenderer {
         out.append(CGenTag.generatedItem("function", "init")).append('\n');
         out.append("void ").append(machine.name()).append("_init(").append(machine.name()).append("_context_t *context);\n\n");
 
+        out.append(CGenTag.generatedItem("function", "tick")).append('\n');
+        out.append("void ").append(machine.name()).append("_tick(").append(machine.name()).append("_context_t *context);\n\n");
+
+        out.append(CGenTag.generatedItem("function", "go_to_state")).append('\n');
+        out.append("void ").append(machine.name()).append("_go_to_state(").append(machine.name()).append("_context_t *context, ")
+                .append(machine.name()).append("_state_t state);\n\n");
+
         for (StateMachineSpec.Event event : machine.events()) {
             out.append(CGenTag.generatedItem("function", "on_" + event.name())).append('\n');
             out.append(docs.function(machine.name() + "_on_" + event.name(), event.description(), "void", event.parameters()));
@@ -91,9 +98,45 @@ final class StateMachineRenderer {
                 .append(indent(project, 1)).append(machine.name()).append("_enter_").append(machine.initial()).append("(context);\n")
                 .append("}\n\n");
 
+        out.append(CGenTag.generatedItem("function", "tick")).append('\n');
+        out.append("void ").append(machine.name()).append("_tick(").append(machine.name()).append("_context_t *context)\n{\n");
+        out.append(indent(project, 1)).append("switch (context->state)\n").append(indent(project, 1)).append("{\n");
+        for (StateMachineSpec.State state : machine.states()) {
+            out.append(indent(project, 2)).append("case ").append(stateConstant(machine, state.name())).append(":\n");
+            out.append(indent(project, 2)).append("{\n");
+            out.append(user.render("state." + state.name() + ".tick", ""));
+            out.append(indent(project, 3)).append("break;\n");
+            out.append(indent(project, 2)).append("}\n");
+        }
+        out.append(indent(project, 2)).append("default:\n").append(indent(project, 3)).append("break;\n");
+        out.append(indent(project, 1)).append("}\n");
+        out.append("}\n\n");
+
+        out.append(CGenTag.generatedItem("function", "go_to_state")).append('\n');
+        out.append("void ").append(machine.name()).append("_go_to_state(").append(machine.name()).append("_context_t *context, ")
+                .append(machine.name()).append("_state_t state)\n{\n");
+        out.append(indent(project, 1)).append("switch (context->state)\n").append(indent(project, 1)).append("{\n");
+        for (StateMachineSpec.State state : machine.states()) {
+            out.append(indent(project, 2)).append("case ").append(stateConstant(machine, state.name())).append(":\n");
+            out.append(indent(project, 3)).append(machine.name()).append("_exit_").append(state.name()).append("(context);\n");
+            out.append(indent(project, 3)).append("break;\n\n");
+        }
+        out.append(indent(project, 2)).append("default:\n").append(indent(project, 3)).append("break;\n");
+        out.append(indent(project, 1)).append("}\n\n");
+        out.append(indent(project, 1)).append("context->state = state;\n\n");
+        out.append(indent(project, 1)).append("switch (state)\n").append(indent(project, 1)).append("{\n");
+        for (StateMachineSpec.State state : machine.states()) {
+            out.append(indent(project, 2)).append("case ").append(stateConstant(machine, state.name())).append(":\n");
+            out.append(indent(project, 3)).append(machine.name()).append("_enter_").append(state.name()).append("(context);\n");
+            out.append(indent(project, 3)).append("break;\n\n");
+        }
+        out.append(indent(project, 2)).append("default:\n").append(indent(project, 3)).append("break;\n");
+        out.append(indent(project, 1)).append("}\n");
+        out.append("}\n\n");
+
         for (StateMachineSpec.Event event : machine.events()) {
             List<StateMachineSpec.Transition> handled = machine.transitions().stream()
-                    .filter(transition -> transition.event().equals(event.name())).toList();
+                    .filter(transition -> event.name().equals(transition.event())).toList();
 
             out.append(CGenTag.generatedItem("function", "on_" + event.name())).append('\n');
             out.append("void ").append(machine.name()).append("_on_").append(event.name())

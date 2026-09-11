@@ -79,9 +79,6 @@ public record StateMachineSpec(
             Values.uniqueNames(parameters.stream().map(InterfaceSpec.Parameter::name).toList(), itemContext + " event " + eventName);
             events.add(new Event(eventName, Values.optionalString(item, "description", "", itemContext), List.copyOf(parameters)));
         }
-        if (events.isEmpty()) {
-            throw new CGenException(contextName + ".events needs at least one event");
-        }
         Values.uniqueNames(events.stream().map(Event::name).toList(), contextName + ".events");
 
         String initial = Values.identifier(Values.requiredString(yaml, "initial", contextName), contextName + ".initial");
@@ -96,7 +93,6 @@ public record StateMachineSpec(
             String itemContext = contextName + ".transitions[" + index + "]";
             Values.onlyKeys(item, itemContext, "from", "event", "to", "guard", "description");
             String from = Values.identifier(Values.requiredString(item, "from", itemContext), itemContext + ".from");
-            String eventName = Values.identifier(Values.requiredString(item, "event", itemContext), itemContext + ".event");
             String to = Values.identifier(Values.requiredString(item, "to", itemContext), itemContext + ".to");
             if (states.stream().noneMatch(state -> state.name().equals(from))) {
                 throw new CGenException(itemContext + ".from references unknown state '" + from + "'");
@@ -104,14 +100,12 @@ public record StateMachineSpec(
             if (states.stream().noneMatch(state -> state.name().equals(to))) {
                 throw new CGenException(itemContext + ".to references unknown state '" + to + "'");
             }
+            String eventName = Values.identifier(Values.requiredString(item, "event", itemContext), itemContext + ".event");
             if (events.stream().noneMatch(event -> event.name().equals(eventName))) {
                 throw new CGenException(itemContext + ".event references unknown event '" + eventName + "'");
             }
             boolean guard = Boolean.parseBoolean(Values.optionalString(item, "guard", "false", itemContext));
             transitions.add(new Transition(from, eventName, to, guard, Values.optionalString(item, "description", "", itemContext)));
-        }
-        if (transitions.isEmpty()) {
-            throw new CGenException(contextName + ".transitions needs at least one transition");
         }
         List<String> transitionKeys = transitions.stream().map(transition -> transition.from() + "/" + transition.event()).toList();
         Values.uniqueNames(transitionKeys, contextName + ".transitions (from/event pairs)");

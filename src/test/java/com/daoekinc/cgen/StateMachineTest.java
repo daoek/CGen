@@ -55,6 +55,8 @@ class StateMachineTest {
         assertTrue(header.contains("door_state_t state;"));
         assertTrue(header.contains("uint32_t open_count;"));
         assertTrue(header.contains("void door_init(door_context_t *context);"));
+        assertTrue(header.contains("void door_tick(door_context_t *context);"));
+        assertTrue(header.contains("void door_go_to_state(door_context_t *context, door_state_t state);"));
         assertTrue(header.contains("void door_on_OPEN_REQUEST(door_context_t *context);"));
         assertTrue(header.contains("void door_on_CLOSE_REQUEST(door_context_t *context);"));
 
@@ -69,6 +71,13 @@ class StateMachineTest {
         assertFalse(source.contains("transition.OPEN.CLOSE_REQUEST.guard"));
         assertTrue(source.contains("if (!cgen_transitioned)"));
         assertTrue(source.contains("/*@CGen(+event.OPEN_REQUEST.unhandled)*/"));
+        assertTrue(source.contains("void door_tick(door_context_t *context)"));
+        assertTrue(source.contains("/*@CGen(+state.CLOSED.tick)*/"));
+        assertTrue(source.contains("/*@CGen(+state.OPEN.tick)*/"));
+        assertTrue(source.contains("void door_go_to_state(door_context_t *context, door_state_t state)"));
+        assertTrue(source.contains("door_exit_CLOSED(context);"));
+        assertTrue(source.contains("context->state = state;"));
+        assertTrue(source.contains("door_enter_OPEN(context);"));
 
         String customEntry = "    context->open_count++;";
         String updated = source.replace(
@@ -78,5 +87,41 @@ class StateMachineTest {
 
         assertEquals(0, cli.run("gen"));
         assertTrue(Files.readString(sourcePath).contains(customEntry));
+    }
+
+    @Test
+    void tickBodyCanCallGoToStateForConditionTriggeredMoves() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("boot.state-machine.yaml"), """
+                kind: state-machine
+                name: boot
+                initial: WAIT
+                states:
+                  - { name: WAIT, description: Waiting for the boot timer }
+                  - { name: INIT, description: Running one-time init }
+                  - { name: RUNNING, description: Normal operation }
+                events:
+                  - { name: FAULT, description: A fault occurred, parameters: [] }
+                transitions:
+                  - { from: RUNNING, event: FAULT, to: WAIT }
+                """);
+
+        assertEquals(0, cli.run("generate"));
+
+        Path sourcePath = temporaryDirectory.resolve("boot.c");
+        String source = Files.readString(sourcePath);
+        assertTrue(source.contains("case BOOT_STATE_WAIT:"));
+        assertTrue(source.contains("case BOOT_STATE_INIT:"));
+        assertTrue(source.contains("case BOOT_STATE_RUNNING:"));
+
+        String customTick = "        if (getMotorSpeed() > 100.0f)\n        {\n            boot_go_to_state(context, BOOT_STATE_WAIT);\n        }";
+        String updated = source.replace(
+                "/*@CGen(+state.RUNNING.tick)*/\n/*@CGen(-state.RUNNING.tick)*/",
+                "/*@CGen(+state.RUNNING.tick)*/\n" + customTick + "\n/*@CGen(-state.RUNNING.tick)*/");
+        Files.writeString(sourcePath, updated);
+
+        assertEquals(0, cli.run("gen"));
+        assertTrue(Files.readString(sourcePath).contains(customTick));
     }
 }

@@ -91,6 +91,25 @@ class ValidationTest {
     }
 
     @Test
+    void rejectsStateMachineTransitionWithoutEvent() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("boot.state-machine.yaml"), """
+                kind: state-machine
+                name: boot
+                initial: WAIT
+                states:
+                  - { name: WAIT }
+                  - { name: INIT }
+                events: []
+                transitions:
+                  - { from: WAIT, to: INIT }
+                """);
+        assertEquals(1, cli.run("generate"));
+        assertTrue(cli.errors().contains(".transitions[0].event is required"));
+    }
+
+    @Test
     void rejectsAdapterMappingWithMismatchedSignatures() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));
