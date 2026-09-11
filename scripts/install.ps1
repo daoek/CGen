@@ -93,6 +93,20 @@ if ($Version) {
     }
     Assert-Sha256Match -FilePath $downloadedJar -FileName $jarName -Sha256SumsPath $downloadedSums
     $sourceJarPath = $downloadedJar
+
+    # -Version mode is meant to run from a single downloaded install.ps1, with no repo
+    # checkout alongside it - so CGen.cmd/uninstall.ps1 can't be assumed to sit next to this
+    # script (via $PSScriptRoot) the way they do in the local-build path below. Fetch them
+    # from the same tagged ref instead.
+    $cgenCmdSource = Join-Path $downloadDirectory 'CGen.cmd'
+    $uninstallSource = Join-Path $downloadDirectory 'uninstall.ps1'
+    $rawBaseUrl = "https://raw.githubusercontent.com/$repositorySlug/$tag/scripts"
+    try {
+        Invoke-WebRequest -Uri "$rawBaseUrl/CGen.cmd" -OutFile $cgenCmdSource -UseBasicParsing
+        Invoke-WebRequest -Uri "$rawBaseUrl/uninstall.ps1" -OutFile $uninstallSource -UseBasicParsing
+    } catch {
+        throw "Could not download install scripts for release '$tag': $($_.Exception.Message)"
+    }
 } else {
     if (-not $SkipBuild) {
         $maven = Get-Command mvn.cmd -ErrorAction SilentlyContinue
@@ -113,15 +127,17 @@ if ($Version) {
         throw "No packaged CGen JAR found. Run without -SkipBuild first."
     }
     $sourceJarPath = $jarCandidates[0].FullName
+    $cgenCmdSource = Join-Path $PSScriptRoot 'CGen.cmd'
+    $uninstallSource = Join-Path $PSScriptRoot 'uninstall.ps1'
 }
 
 New-Item -ItemType Directory -Force -Path $resolvedInstallDirectory | Out-Null
 $temporaryJar = Join-Path $resolvedInstallDirectory 'cgen.jar.new'
 Copy-Item -Force -LiteralPath $sourceJarPath -Destination $temporaryJar
 Move-Item -Force -LiteralPath $temporaryJar -Destination (Join-Path $resolvedInstallDirectory 'cgen.jar')
-Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot 'CGen.cmd') -Destination (Join-Path $resolvedInstallDirectory 'CGen.cmd')
-Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot $markerName) -Destination $markerPath
-Copy-Item -Force -LiteralPath (Join-Path $PSScriptRoot 'uninstall.ps1') -Destination (Join-Path $resolvedInstallDirectory 'Uninstall-CGen.ps1')
+Copy-Item -Force -LiteralPath $cgenCmdSource -Destination (Join-Path $resolvedInstallDirectory 'CGen.cmd')
+Copy-Item -Force -LiteralPath $uninstallSource -Destination (Join-Path $resolvedInstallDirectory 'Uninstall-CGen.ps1')
+Set-Content -LiteralPath $markerPath -Value 'CGen managed installation. Safe removal requires this marker.' -Encoding utf8
 
 if (-not $SkipPathUpdate) {
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
