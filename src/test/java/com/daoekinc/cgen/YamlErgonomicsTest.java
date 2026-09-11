@@ -108,8 +108,8 @@ class YamlErgonomicsTest {
         Path sourcePath = temporaryDirectory.resolve("logger.c");
         String customSet = "    if (value <= 1000U)\n    {\n        log_count = value;\n    }";
         String updated = source.replace(
-                "/*@CGen usercode+ variable.log_count.set*/\n    log_count = value;\n/*@CGen usercode-*/",
-                "/*@CGen usercode+ variable.log_count.set*/\n" + customSet + "\n/*@CGen usercode-*/");
+                "    /*@CGen usercode+ variable.log_count.set*/\n    log_count = value;\n    /*@CGen usercode-*/",
+                "    /*@CGen usercode+ variable.log_count.set*/\n" + customSet + "\n    /*@CGen usercode-*/");
         Files.writeString(sourcePath, updated);
 
         assertEquals(0, cli.run("gen"));

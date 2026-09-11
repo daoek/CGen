@@ -33,8 +33,8 @@ class WorkflowTest {
         assertFalse(generated.contains("/* Add custom"));
         assertFalse(generated.contains("/* Add implementation."));
         generated = generated.replace(
-                "/*@CGen usercode+ function.sensor.init.body*/\n/*@CGen usercode-*/",
-                "/*@CGen usercode+ function.sensor.init.body*/\n" + customBody + "\n/*@CGen usercode-*/");
+                "    /*@CGen usercode+ function.sensor.init.body*/\n    /*@CGen usercode-*/",
+                "    /*@CGen usercode+ function.sensor.init.body*/\n" + customBody + "\n    /*@CGen usercode-*/");
         Files.writeString(moduleSource, generated);
 
         assertEquals(0, cli.run("gen"));

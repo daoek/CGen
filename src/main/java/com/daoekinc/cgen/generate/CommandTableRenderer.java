@@ -100,7 +100,7 @@ final class CommandTableRenderer {
                     .append(indent(project, 1)).append("(void)context;\n")
                     .append(indent(project, 1)).append("(void)payload;\n")
                     .append(indent(project, 1)).append("(void)length;\n\n");
-            out.append(user.render("command." + command.name() + ".body", ""));
+            out.append(user.render("command." + command.name() + ".body", "", indent(project, 1)));
             out.append("}\n\n");
         }
     }
@@ -117,7 +117,7 @@ final class CommandTableRenderer {
             out.append(indent(project, 3)).append("break;\n\n");
         }
         out.append(indent(project, 2)).append("default:\n").append(indent(project, 2)).append("{\n");
-        out.append(user.render("command.unknown", ""));
+        out.append(user.render("command.unknown", "", indent(project, 3)));
         out.append(indent(project, 3)).append("break;\n");
         out.append(indent(project, 2)).append("}\n");
         out.append(indent(project, 1)).append("}\n");

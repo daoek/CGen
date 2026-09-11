@@ -159,11 +159,13 @@ final class ModuleRenderer {
             out.append(CGenTag.generatedItem("public-accessor", variable.name())).append('\n');
             appendAccessorSignature(out, module, variable, true);
             out.append("\n{\n");
-            out.append(user.render("variable." + variable.name() + ".get", indent(project, 1) + "return " + variable.name() + ";"));
+            out.append(user.render("variable." + variable.name() + ".get", indent(project, 1) + "return " + variable.name() + ";",
+                    indent(project, 1)));
             out.append("}\n\n");
             appendAccessorSignature(out, module, variable, false);
             out.append("\n{\n");
-            out.append(user.render("variable." + variable.name() + ".set", indent(project, 1) + variable.name() + " = value;"));
+            out.append(user.render("variable." + variable.name() + ".set", indent(project, 1) + variable.name() + " = value;",
+                    indent(project, 1)));
             out.append("}\n\n");
         }
     }
@@ -188,7 +190,7 @@ final class ModuleRenderer {
                 out.append(indent(project, 1)).append("(void)").append(parameter.name()).append(";\n");
             }
             out.append('\n');
-            out.append(user.render("function." + contract.name() + "." + function.name() + ".body", ""));
+            out.append(user.render("function." + contract.name() + "." + function.name() + ".body", "", indent(project, 1)));
             if (returnsValue) {
                 out.append(indent(project, 1)).append("return cgen_result;\n");
             }
@@ -220,7 +222,7 @@ final class ModuleRenderer {
                 .append(indent(project, 1)).append("if (!").append(module.name()).append("_singleton_initialized)\n")
                 .append(indent(project, 1)).append("{\n")
                 .append(indent(project, 2)).append(module.name()).append("_singleton_initialized = true;\n");
-        out.append(user.render("singleton.init", ""));
+        out.append(user.render("singleton.init", "", indent(project, 2)));
         out.append(indent(project, 1)).append("}\n")
                 .append(indent(project, 1)).append("return &").append(module.name()).append("_singleton_context;\n")
                 .append("}\n\n");

@@ -121,16 +121,26 @@ public final class TagHelper {
         }
 
         public String render(String name, String defaultBody) {
+            return render(name, defaultBody, "");
+        }
+
+        /**
+         * Same as {@link #render(String, String)}, but the begin/end marker lines are
+         * prefixed with {@code indent} so they line up with the surrounding generated
+         * code. Existing body content is left untouched (it's the user's, not ours to
+         * reformat) — only the marker lines get the prefix.
+         */
+        public String render(String name, String defaultBody, String indent) {
             used.add(name);
             String body = values.getOrDefault(name, defaultBody);
-            StringBuilder result = new StringBuilder(CGenTag.userBegin(name)).append('\n');
+            StringBuilder result = new StringBuilder(indent).append(CGenTag.userBegin(name)).append('\n');
             if (!body.isEmpty()) {
                 result.append(body);
                 if (!body.endsWith("\n")) {
                     result.append('\n');
                 }
             }
-            return result.append(CGenTag.userEnd()).append('\n').toString();
+            return result.append(indent).append(CGenTag.userEnd()).append('\n').toString();
         }
 
         public void removeIfMatches(String name, String generatedBody) {

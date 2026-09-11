@@ -81,8 +81,8 @@ class StateMachineTest {
 
         String customEntry = "    context->open_count++;";
         String updated = source.replace(
-                "/*@CGen usercode+ state.OPEN.entry*/\n/*@CGen usercode-*/",
-                "/*@CGen usercode+ state.OPEN.entry*/\n" + customEntry + "\n/*@CGen usercode-*/");
+                "    /*@CGen usercode+ state.OPEN.entry*/\n    /*@CGen usercode-*/",
+                "    /*@CGen usercode+ state.OPEN.entry*/\n" + customEntry + "\n    /*@CGen usercode-*/");
         Files.writeString(sourcePath, updated);
 
         assertEquals(0, cli.run("gen"));
@@ -117,8 +117,8 @@ class StateMachineTest {
 
         String customTick = "        if (getMotorSpeed() > 100.0f)\n        {\n            boot_go_to_state(context, BOOT_STATE_WAIT);\n        }";
         String updated = source.replace(
-                "/*@CGen usercode+ state.RUNNING.tick*/\n/*@CGen usercode-*/",
-                "/*@CGen usercode+ state.RUNNING.tick*/\n" + customTick + "\n/*@CGen usercode-*/");
+                "            /*@CGen usercode+ state.RUNNING.tick*/\n            /*@CGen usercode-*/",
+                "            /*@CGen usercode+ state.RUNNING.tick*/\n" + customTick + "\n            /*@CGen usercode-*/");
         Files.writeString(sourcePath, updated);
 
         assertEquals(0, cli.run("gen"));

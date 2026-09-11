@@ -123,7 +123,7 @@ final class AdapterRenderer {
                 out.append(indent(project, 1)).append("(void)").append(parameter.name()).append(";\n");
             }
             out.append('\n');
-            out.append(user.render("function." + from.name() + "." + function.name() + ".body", ""));
+            out.append(user.render("function." + from.name() + "." + function.name() + ".body", "", indent(project, 1)));
         } else {
             out.append('\n');
             out.append(indent(project, 1));

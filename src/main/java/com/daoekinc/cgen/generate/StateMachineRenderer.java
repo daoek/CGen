@@ -116,14 +116,14 @@ final class StateMachineRenderer {
             out.append("static void ").append(machine.name()).append("_enter_").append(state.name())
                     .append('(').append(machine.name()).append("_context_t *context)\n{\n")
                     .append(indent(project, 1)).append("(void)context;\n\n");
-            out.append(user.render("state." + state.name() + ".entry", ""));
+            out.append(user.render("state." + state.name() + ".entry", "", indent(project, 1)));
             out.append("}\n\n");
 
             out.append(CGenTag.generatedItem("private-function", machine.name() + "_exit_" + state.name())).append('\n');
             out.append("static void ").append(machine.name()).append("_exit_").append(state.name())
                     .append('(').append(machine.name()).append("_context_t *context)\n{\n")
                     .append(indent(project, 1)).append("(void)context;\n\n");
-            out.append(user.render("state." + state.name() + ".exit", ""));
+            out.append(user.render("state." + state.name() + ".exit", "", indent(project, 1)));
             out.append("}\n\n");
         }
     }
@@ -143,7 +143,7 @@ final class StateMachineRenderer {
         for (StateMachineSpec.State state : machine.states()) {
             out.append(indent(project, 2)).append("case ").append(stateConstant(machine, state.name())).append(":\n");
             out.append(indent(project, 2)).append("{\n");
-            out.append(user.render("state." + state.name() + ".tick", ""));
+            out.append(user.render("state." + state.name() + ".tick", "", indent(project, 3)));
             out.append(indent(project, 3)).append("break;\n");
             out.append(indent(project, 2)).append("}\n");
         }
@@ -198,7 +198,7 @@ final class StateMachineRenderer {
             out.append(indent(project, 2)).append("default:\n").append(indent(project, 3)).append("break;\n");
             out.append(indent(project, 1)).append("}\n\n");
             out.append(indent(project, 1)).append("if (!cgen_transitioned)\n").append(indent(project, 1)).append("{\n");
-            out.append(user.render("event." + event.name() + ".unhandled", ""));
+            out.append(user.render("event." + event.name() + ".unhandled", "", indent(project, 2)));
             out.append(indent(project, 1)).append("}\n");
             out.append("}\n\n");
         }
@@ -217,12 +217,12 @@ final class StateMachineRenderer {
         int bodyLevel = 3;
         if (transition.guard()) {
             out.append(indent(project, 3)).append("bool cgen_guard = true;\n\n");
-            out.append(user.render("transition." + regionKey + ".guard", ""));
+            out.append(user.render("transition." + regionKey + ".guard", "", indent(project, 3)));
             out.append(indent(project, 3)).append("if (cgen_guard)\n").append(indent(project, 3)).append("{\n");
             bodyLevel = 4;
         }
         out.append(indent(project, bodyLevel)).append(machine.name()).append("_exit_").append(transition.from()).append("(context);\n");
-        out.append(user.render("transition." + regionKey + ".action", ""));
+        out.append(user.render("transition." + regionKey + ".action", "", indent(project, bodyLevel)));
         out.append(indent(project, bodyLevel)).append("context->state = ").append(stateConstant(machine, transition.to())).append(";\n");
         out.append(indent(project, bodyLevel)).append(machine.name()).append("_enter_").append(transition.to()).append("(context);\n");
         out.append(indent(project, bodyLevel)).append("cgen_transitioned = true;\n");
