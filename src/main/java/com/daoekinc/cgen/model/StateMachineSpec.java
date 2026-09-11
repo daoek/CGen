@@ -62,11 +62,11 @@ public record StateMachineSpec(
             Values.onlyKeys(item, itemContext, "name", "description", "parameters");
             String eventName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
             List<InterfaceSpec.Parameter> parameters = new ArrayList<>();
-            List<Map<String, Object>> parameterItems = Values.mapList(item, "parameters", itemContext,
+            List<Map<String, Object>> parameterItems = Values.itemList(item, "parameters", itemContext,
                     """
                     parameters:
-                      - { type: uint8_t *, name: buffer }
-                      - { type: uint32_t, name: len }""");
+                      - uint8_t *buffer
+                      - uint32_t len""", text -> Values.compactField(text, itemContext + ".parameters"));
             for (int parameterIndex = 0; parameterIndex < parameterItems.size(); parameterIndex++) {
                 Map<String, Object> parameter = parameterItems.get(parameterIndex);
                 String parameterContext = itemContext + ".parameters[" + parameterIndex + "]";

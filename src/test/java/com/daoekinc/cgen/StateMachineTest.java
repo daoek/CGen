@@ -66,14 +66,14 @@ class StateMachineTest {
         assertTrue(source.contains("context->state = DOOR_STATE_CLOSED;"));
         assertTrue(source.contains("door_enter_CLOSED(context);"));
         assertTrue(source.contains("bool cgen_guard = true;"));
-        assertTrue(source.contains("/*@CGen(+transition.CLOSED.OPEN_REQUEST.guard)*/"));
-        assertTrue(source.contains("/*@CGen(+transition.OPEN.CLOSE_REQUEST.action)*/"));
+        assertTrue(source.contains("/*@CGen usercode+ transition.CLOSED.OPEN_REQUEST.guard*/"));
+        assertTrue(source.contains("/*@CGen usercode+ transition.OPEN.CLOSE_REQUEST.action*/"));
         assertFalse(source.contains("transition.OPEN.CLOSE_REQUEST.guard"));
         assertTrue(source.contains("if (!cgen_transitioned)"));
-        assertTrue(source.contains("/*@CGen(+event.OPEN_REQUEST.unhandled)*/"));
+        assertTrue(source.contains("/*@CGen usercode+ event.OPEN_REQUEST.unhandled*/"));
         assertTrue(source.contains("void door_tick(door_context_t *context)"));
-        assertTrue(source.contains("/*@CGen(+state.CLOSED.tick)*/"));
-        assertTrue(source.contains("/*@CGen(+state.OPEN.tick)*/"));
+        assertTrue(source.contains("/*@CGen usercode+ state.CLOSED.tick*/"));
+        assertTrue(source.contains("/*@CGen usercode+ state.OPEN.tick*/"));
         assertTrue(source.contains("void door_go_to_state(door_context_t *context, door_state_t state)"));
         assertTrue(source.contains("door_exit_CLOSED(context);"));
         assertTrue(source.contains("context->state = state;"));
@@ -81,8 +81,8 @@ class StateMachineTest {
 
         String customEntry = "    context->open_count++;";
         String updated = source.replace(
-                "/*@CGen(+state.OPEN.entry)*/\n/*@CGen(-state.OPEN.entry)*/",
-                "/*@CGen(+state.OPEN.entry)*/\n" + customEntry + "\n/*@CGen(-state.OPEN.entry)*/");
+                "/*@CGen usercode+ state.OPEN.entry*/\n/*@CGen usercode-*/",
+                "/*@CGen usercode+ state.OPEN.entry*/\n" + customEntry + "\n/*@CGen usercode-*/");
         Files.writeString(sourcePath, updated);
 
         assertEquals(0, cli.run("gen"));
@@ -117,8 +117,8 @@ class StateMachineTest {
 
         String customTick = "        if (getMotorSpeed() > 100.0f)\n        {\n            boot_go_to_state(context, BOOT_STATE_WAIT);\n        }";
         String updated = source.replace(
-                "/*@CGen(+state.RUNNING.tick)*/\n/*@CGen(-state.RUNNING.tick)*/",
-                "/*@CGen(+state.RUNNING.tick)*/\n" + customTick + "\n/*@CGen(-state.RUNNING.tick)*/");
+                "/*@CGen usercode+ state.RUNNING.tick*/\n/*@CGen usercode-*/",
+                "/*@CGen usercode+ state.RUNNING.tick*/\n" + customTick + "\n/*@CGen usercode-*/");
         Files.writeString(sourcePath, updated);
 
         assertEquals(0, cli.run("gen"));

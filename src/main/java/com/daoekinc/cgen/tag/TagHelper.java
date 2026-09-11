@@ -67,19 +67,18 @@ public final class TagHelper {
         List<String> body = null;
         for (String line : content.split("\\R", -1)) {
             String beginName = CGenTag.userBeginName(line);
-            String endName = CGenTag.userEndName(line);
             if (beginName != null) {
                 if (current != null) {
                     throw new CGenException("Nested user region in " + file);
                 }
                 current = beginName;
-                if (current == null || current.isBlank() || regions.containsKey(current)) {
+                if (current.isBlank() || regions.containsKey(current)) {
                     throw new CGenException("Invalid or duplicate user region in " + file);
                 }
                 body = new ArrayList<>();
-            } else if (endName != null) {
-                if (current == null || !current.equals(endName)) {
-                    throw new CGenException("Mismatched user region in " + file);
+            } else if (CGenTag.isUserEnd(line)) {
+                if (current == null) {
+                    throw new CGenException("Unexpected end of user region in " + file);
                 }
                 regions.put(current, String.join("\n", body));
                 current = null;
@@ -131,7 +130,7 @@ public final class TagHelper {
                     result.append('\n');
                 }
             }
-            return result.append(CGenTag.userEnd(name)).append('\n').toString();
+            return result.append(CGenTag.userEnd()).append('\n').toString();
         }
 
         public void removeIfMatches(String name, String generatedBody) {

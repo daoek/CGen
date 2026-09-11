@@ -92,11 +92,11 @@ public record InterfaceSpec(
             String functionName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
             String returnType = oneLine(Values.optionalString(item, "return", "void", itemContext), itemContext + ".return");
             List<Parameter> parameters = new ArrayList<>();
-            List<Map<String, Object>> parameterItems = Values.mapList(item, "parameters", itemContext,
+            List<Map<String, Object>> parameterItems = Values.itemList(item, "parameters", itemContext,
                     """
                     parameters:
-                      - { type: uint8_t *, name: buffer }
-                      - { type: uint32_t, name: len }""");
+                      - uint8_t *buffer
+                      - uint32_t len""", text -> Values.compactField(text, itemContext + ".parameters"));
             for (int parameterIndex = 0; parameterIndex < parameterItems.size(); parameterIndex++) {
                 Map<String, Object> parameter = parameterItems.get(parameterIndex);
                 String parameterContext = itemContext + ".parameters[" + parameterIndex + "]";
@@ -133,7 +133,8 @@ public record InterfaceSpec(
 
     static List<Field> parseFields(Map<String, Object> map, String key, String context) {
         List<Field> fields = new ArrayList<>();
-        for (Map<String, Object> field : Values.mapList(map, key, context)) {
+        for (Map<String, Object> field : Values.itemList(map, key, context,
+                key + ":\n  - uint32_t speed", text -> Values.compactField(text, context + "." + key))) {
             Values.onlyKeys(field, context + "." + key, "type", "name", "description");
             fields.add(new Field(
                     oneLine(Values.requiredString(field, "type", context + "." + key), context + "." + key + ".type"),

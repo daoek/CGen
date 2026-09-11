@@ -27,14 +27,14 @@ class WorkflowTest {
 
         Path moduleSource = temporaryDirectory.resolve("drivers/demo/demo_sensor.c");
         String generated = Files.readString(moduleSource);
-        assertTrue(generated.contains("/*@CGen(+function.sensor.init.body)*/"));
+        assertTrue(generated.contains("/*@CGen usercode+ function.sensor.init.body*/"));
         assertFalse(generated.contains("kind="));
         String customBody = "    module->reserved = 7U;\n    cgen_result = 0;";
         assertFalse(generated.contains("/* Add custom"));
         assertFalse(generated.contains("/* Add implementation."));
         generated = generated.replace(
-                "/*@CGen(+function.sensor.init.body)*/\n/*@CGen(-function.sensor.init.body)*/",
-                "/*@CGen(+function.sensor.init.body)*/\n" + customBody + "\n/*@CGen(-function.sensor.init.body)*/");
+                "/*@CGen usercode+ function.sensor.init.body*/\n/*@CGen usercode-*/",
+                "/*@CGen usercode+ function.sensor.init.body*/\n" + customBody + "\n/*@CGen usercode-*/");
         Files.writeString(moduleSource, generated);
 
         assertEquals(0, cli.run("gen"));

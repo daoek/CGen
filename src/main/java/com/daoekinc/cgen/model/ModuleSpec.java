@@ -46,7 +46,12 @@ public record ModuleSpec(
         List<InterfaceSpec.Field> fields = InterfaceSpec.parseFields(yaml, "context", contextName);
 
         List<Variable> variables = new ArrayList<>();
-        for (Map<String, Object> item : Values.mapList(yaml, "variables", contextName)) {
+        List<Map<String, Object>> variableItems = Values.itemList(yaml, "variables", contextName,
+                """
+                variables:
+                  - uint32_t transfer_count public
+                  - bool busy""", text -> Values.compactVariable(text, contextName + ".variables"));
+        for (Map<String, Object> item : variableItems) {
             String itemContext = contextName + ".variables";
             Values.onlyKeys(item, itemContext, "type", "name", "description", "visibility", "initial");
             String visibilityText = Values.optionalString(item, "visibility", "private", itemContext).toUpperCase();

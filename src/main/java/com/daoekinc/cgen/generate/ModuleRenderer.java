@@ -28,13 +28,23 @@ final class ModuleRenderer {
         appendIncludes(out, contractIncludes, module.includes());
         out.append(user.render("module.header.preamble", "")).append('\n');
 
+        boolean accessors = project.publicVariableStyle().equals("accessors");
         for (ModuleSpec.Variable variable : module.variables()) {
             if (variable.visibility() == ModuleSpec.Visibility.PUBLIC) {
-                out.append(CGenTag.generatedItem("public-variable", variable.name())).append('\n');
-                out.append(docs.variable(variable.name(), variable.description()));
-                out.append("extern ");
-                appendTypedName(out, variable.type(), variable.name());
-                out.append(";\n\n");
+                if (accessors) {
+                    out.append(CGenTag.generatedItem("public-accessor", variable.name())).append('\n');
+                    out.append(docs.variable(variable.name(), variable.description()));
+                    appendAccessorSignature(out, module, variable, true);
+                    out.append(";\n");
+                    appendAccessorSignature(out, module, variable, false);
+                    out.append(";\n\n");
+                } else {
+                    out.append(CGenTag.generatedItem("public-variable", variable.name())).append('\n');
+                    out.append(docs.variable(variable.name(), variable.description()));
+                    out.append("extern ");
+                    appendTypedName(out, variable.type(), variable.name());
+                    out.append(";\n\n");
+                }
             }
         }
         out.append(CGenTag.generatedItem("context", module.name())).append('\n');
@@ -77,10 +87,13 @@ final class ModuleRenderer {
         }
         out.append('\n');
         out.append(user.render("module.source.includes", "")).append('\n');
+        boolean accessors = project.publicVariableStyle().equals("accessors");
         for (ModuleSpec.Variable variable : module.variables()) {
-            out.append(CGenTag.generatedItem(variable.visibility() == ModuleSpec.Visibility.PRIVATE ? "private-variable" : "variable-definition", variable.name())).append('\n');
+            boolean privateStorage = variable.visibility() == ModuleSpec.Visibility.PRIVATE
+                    || (variable.visibility() == ModuleSpec.Visibility.PUBLIC && accessors);
+            out.append(CGenTag.generatedItem(privateStorage ? "private-variable" : "variable-definition", variable.name())).append('\n');
             out.append(docs.variable(variable.name(), variable.description()));
-            if (variable.visibility() == ModuleSpec.Visibility.PRIVATE) {
+            if (privateStorage) {
                 out.append("static ");
             }
             appendTypedName(out, variable.type(), variable.name());
@@ -88,6 +101,19 @@ final class ModuleRenderer {
                 out.append(" = ").append(variable.initial());
             }
             out.append(";\n\n");
+        }
+        for (ModuleSpec.Variable variable : module.variables()) {
+            if (variable.visibility() == ModuleSpec.Visibility.PUBLIC && accessors) {
+                out.append(CGenTag.generatedItem("public-accessor", variable.name())).append('\n');
+                appendAccessorSignature(out, module, variable, true);
+                out.append("\n{\n");
+                out.append(user.render("variable." + variable.name() + ".get", indent(project, 1) + "return " + variable.name() + ";"));
+                out.append("}\n\n");
+                appendAccessorSignature(out, module, variable, false);
+                out.append("\n{\n");
+                out.append(user.render("variable." + variable.name() + ".set", indent(project, 1) + variable.name() + " = value;"));
+                out.append("}\n\n");
+            }
         }
 
         for (InterfaceSpec contract : interfaces) {
@@ -143,5 +169,19 @@ final class ModuleRenderer {
         out.append(user.render("module.source.footer", ""));
         out.append(user.renderOrphans());
         return out.toString();
+    }
+
+    private static void appendAccessorSignature(StringBuilder out, ModuleSpec module, ModuleSpec.Variable variable, boolean isGetter) {
+        if (isGetter) {
+            out.append(variable.type());
+            if (!variable.type().stripTrailing().endsWith("*")) {
+                out.append(' ');
+            }
+            out.append(module.name()).append("_get_").append(variable.name()).append("(void)");
+        } else {
+            out.append("void ").append(module.name()).append("_set_").append(variable.name()).append('(');
+            appendTypedName(out, variable.type(), "value");
+            out.append(')');
+        }
     }
 }

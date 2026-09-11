@@ -5,6 +5,8 @@ import java.util.regex.Pattern;
 
 public final class CGenTag {
     private static final Pattern MARKER = Pattern.compile("^\\s*/\\*@CGen\\(([^)]*)\\)\\*/\\s*$");
+    private static final Pattern USER_BEGIN = Pattern.compile("^\\s*/\\*@CGen usercode\\+ (\\S+)\\*/\\s*$");
+    private static final Pattern USER_END = Pattern.compile("^\\s*/\\*@CGen usercode-\\*/\\s*$");
 
     private CGenTag() {
     }
@@ -18,11 +20,11 @@ public final class CGenTag {
     }
 
     public static String userBegin(String name) {
-        return "/*@CGen(+" + name + ")*/";
+        return "/*@CGen usercode+ " + name + "*/";
     }
 
-    public static String userEnd(String name) {
-        return "/*@CGen(-" + name + ")*/";
+    public static String userEnd() {
+        return "/*@CGen usercode-*/";
     }
 
     public static boolean isGeneratedFile(String line) {
@@ -31,13 +33,12 @@ public final class CGenTag {
     }
 
     public static String userBeginName(String line) {
-        String payload = payload(line);
-        return payload != null && payload.startsWith("+") ? payload.substring(1) : null;
+        Matcher matcher = USER_BEGIN.matcher(line);
+        return matcher.matches() ? matcher.group(1) : null;
     }
 
-    public static String userEndName(String line) {
-        String payload = payload(line);
-        return payload != null && payload.startsWith("-") ? payload.substring(1) : null;
+    public static boolean isUserEnd(String line) {
+        return USER_END.matcher(line).matches();
     }
 
     private static String payload(String line) {
@@ -49,6 +50,6 @@ public final class CGenTag {
     }
 
     public static boolean isMarker(String line) {
-        return MARKER.matcher(line).matches();
+        return MARKER.matcher(line).matches() || USER_BEGIN.matcher(line).matches() || USER_END.matcher(line).matches();
     }
 }

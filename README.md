@@ -2,7 +2,8 @@
 
 CGen is a small YAML-driven CLI for generating C interface headers and concrete
 module headers/sources. Generated files contain compact `/*@CGen(...)*/`
-markers and named user regions, so implementation code survives regeneration.
+structural markers and distinctive `/*@CGen usercode+ name*/` ... `/*@CGen
+usercode-*/` user regions, so implementation code survives regeneration.
 
 ## Build and run
 
@@ -88,10 +89,19 @@ documentation:
 format:
   indent: 4
   lineEnding: lf # lf or crlf
+  publicVariables: extern # extern or accessors
 ```
 
 Project configuration contains generator-wide preferences only; it does not
 emit additional C headers or sources.
+
+`format.publicVariables` picks how a module's `public` variables are exposed
+project-wide. `extern` (default) gives each one a plain `extern` declaration
+in the header and a matching definition in the source. `accessors` keeps the
+variable `static` (private storage) and instead generates `<module>_get_<name>`
+/ `<module>_set_<name>` functions, each with its own `variable.<name>.get` /
+`variable.<name>.set` user region so you can add validation or side effects
+on read/write. See [Module YAML](#module-yaml) below.
 
 For custom documentation, set `documentation.style` to `custom` and point
 `documentation.file` at a YAML file with optional `file`, `function`, `type`,
@@ -122,15 +132,15 @@ enums:
 structs:
   - name: common_iic_options_t
     fields:
-      - { type: uint32_t, name: speed }
+      - uint32_t speed
 
 functions:
   - name: write
     return: common_iic_status_t
     description: Write bytes
     parameters:
-      - { type: const uint8_t *, name: data, description: Source bytes }
-      - { type: uint32_t, name: length, description: Byte count }
+      - const uint8_t *data
+      - uint32_t length
 ```
 
 The generated interface contains a context/function-pointer table and guarded
@@ -138,6 +148,11 @@ inline dispatch functions, following the pattern in the target examples.
 Every non-`void` function must define `invalidReturn` either at interface or
 function level. This avoids silently generating an invalid `-1` for enum,
 pointer, unsigned, or application-specific return types.
+
+Struct fields, function/event `parameters`, and `context` entries all accept
+this compact `"type name"` shorthand in addition to the full
+`{ type: ..., name: ..., description: ... }` map form. Use the map form when
+you need a `description`.
 
 ## Module YAML
 
@@ -151,15 +166,31 @@ implements: [common_iic]
 includes: ['"vendor_i2c.h"']
 
 context:
-  - { type: void *, name: hardware }
+  - void *hardware
 
 variables:
-  - { type: uint32_t, name: transfer_count, visibility: public, initial: 0U }
-  - { type: bool, name: busy, visibility: private, initial: false }
+  - uint32_t transfer_count public
+  - bool busy
 ```
 
-Public variables receive an `extern` declaration in the module header and one
-definition in the source. Private variables are `static` in the source.
+Variables default to `private` (`static` storage) — write just `type name`.
+Append a trailing `public` to expose one, or use the map form
+(`{ type: ..., name: ..., visibility: public, initial: ... }`) when you need
+`initial`/`description` alongside it. How a `public` variable is exposed is
+controlled project-wide by `format.publicVariables` (see
+[Project configuration](#project-configuration)): `extern` gives it a plain
+`extern` declaration in the header and a definition in the source; `accessors`
+keeps it `static` and generates a getter/setter pair instead, each with its
+own user region:
+
+```c
+uint32_t ra_iic_get_transfer_count(void)
+{
+/*@CGen usercode+ variable.transfer_count.get*/
+    return transfer_count;
+/*@CGen usercode-*/
+}
+```
 
 Set `singleton: true` to also generate a lazy-init accessor instead of relying
 on an externally supplied context:
@@ -173,9 +204,9 @@ keeps the context as static storage and runs a `singleton.init` user region
 the first time the accessor is called:
 
 ```c
-/*@CGen(+singleton.init)*/
+/*@CGen usercode+ singleton.init*/
 /* One-time setup for the singleton instance. */
-/*@CGen(-singleton.init)*/
+/*@CGen usercode-*/
 ```
 
 ## State machine YAML
@@ -194,7 +225,7 @@ header: door.h
 source: door.c
 includes: []
 context:
-  - { type: uint32_t, name: open_count }
+  - uint32_t open_count
 
 initial: CLOSED
 
@@ -218,10 +249,10 @@ always carries `state` plus your `context` fields). Per state, entry/exit
 hooks are user regions:
 
 ```c
-/*@CGen(+state.OPEN.entry)*/
-/*@CGen(-state.OPEN.entry)*/
-/*@CGen(+state.OPEN.exit)*/
-/*@CGen(-state.OPEN.exit)*/
+/*@CGen usercode+ state.OPEN.entry*/
+/*@CGen usercode-*/
+/*@CGen usercode+ state.OPEN.exit*/
+/*@CGen usercode-*/
 ```
 
 When `guard: true`, the transition gets a `bool cgen_guard = true;` default
@@ -243,12 +274,12 @@ write whatever runs on every tick while in that state: polling, timers,
 sensor reads, and conditional moves to another state, all in plain C:
 
 ```c
-/*@CGen(+state.RUNNING.tick)*/
+/*@CGen usercode+ state.RUNNING.tick*/
 if (getMotorSpeed() > 100.0f)
 {
     door_go_to_state(context, DOOR_STATE_FAULT);
 }
-/*@CGen(-state.RUNNING.tick)*/
+/*@CGen usercode-*/
 ```
 
 `door_go_to_state()` is the generic transition primitive underneath: it runs
@@ -307,8 +338,8 @@ auto-number starting at 0 — mixing the two is rejected. Generated API:
 static handler per command:
 
 ```c
-/*@CGen(+command.PING.body)*/
-/*@CGen(-command.PING.body)*/
+/*@CGen usercode+ command.PING.body*/
+/*@CGen usercode-*/
 ```
 
 An opcode with no matching command falls through to `command.unknown`.
@@ -372,8 +403,8 @@ of `mappings`, or rejected for a signature mismatch, falls back to a plain
 stub body exactly like an unmapped `module` function:
 
 ```c
-/*@CGen(+function.bus.reset.body)*/
-/*@CGen(-function.bus.reset.body)*/
+/*@CGen usercode+ function.bus.reset.body*/
+/*@CGen usercode-*/
 ```
 
 ## MISRA-oriented generated C
@@ -391,12 +422,14 @@ projects enforcing advisory Rule 11.5 need to record that design deviation.
 
 ## Safe regeneration and permanent detach
 
-Edit only inside named user regions:
+Edit only inside named user regions — marked distinctively with `usercode+`/
+`usercode-` so they stand out from CGen's other `/*@CGen(...)*/` structural
+markers:
 
 ```c
-/*@CGen(+function.common_iic.write.body)*/
+/*@CGen usercode+ function.common_iic.write.body*/
 /* Your code is retained here. */
-/*@CGen(-function.common_iic.write.body)*/
+/*@CGen usercode-*/
 ```
 
 CGen refuses to overwrite files without its generated-file marker. If a YAML

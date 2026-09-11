@@ -110,7 +110,7 @@ class PatternGeneratorsTest {
         assertTrue(header.contains("UART_CMD_CMD_RESET = 1"));
         assertTrue(source.contains("case UART_CMD_CMD_PING:"));
         assertTrue(source.contains("uart_cmd_handle_PING(context, payload, length);"));
-        assertTrue(source.contains("/*@CGen(+command.unknown)*/"));
+        assertTrue(source.contains("/*@CGen usercode+ command.unknown*/"));
     }
 
     @Test
@@ -156,7 +156,7 @@ class PatternGeneratorsTest {
 
         String source = Files.readString(temporaryDirectory.resolve("bus_adapter.c"));
         assertTrue(source.contains("cgen_result = bus_hal_send(adapter->target, data, length);"));
-        assertTrue(source.contains("/*@CGen(+function.bus.reset.body)*/"));
+        assertTrue(source.contains("/*@CGen usercode+ function.bus.reset.body*/"));
         assertTrue(source.contains("interface->write = bus_adapter_bus_write;"));
         assertTrue(source.contains("interface->reset = bus_adapter_bus_reset;"));
     }

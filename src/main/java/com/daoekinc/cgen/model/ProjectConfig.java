@@ -10,7 +10,8 @@ public record ProjectConfig(
         String version,
         Documentation documentation,
         int indent,
-        String lineEnding) {
+        String lineEnding,
+        String publicVariableStyle) {
 
     public record Documentation(String style, Path customFile) {
     }
@@ -43,7 +44,7 @@ public record ProjectConfig(
         }
 
         Map<String, Object> format = Values.optionalMap(yaml, "format", context);
-        Values.onlyKeys(format, context + ".format", "indent", "lineEnding");
+        Values.onlyKeys(format, context + ".format", "indent", "lineEnding", "publicVariables");
         int indent = Values.optionalInt(format, "indent", 4, context + ".format");
         if (indent < 2 || indent > 8) {
             throw new CGenException("format.indent must be between 2 and 8");
@@ -54,9 +55,13 @@ public record ProjectConfig(
             case "crlf" -> "\r\n";
             default -> throw new CGenException("format.lineEnding must be lf or crlf");
         };
+        String publicVariableStyle = Values.optionalString(format, "publicVariables", "extern", context + ".format").toLowerCase();
+        if (!publicVariableStyle.equals("extern") && !publicVariableStyle.equals("accessors")) {
+            throw new CGenException("format.publicVariables must be extern or accessors");
+        }
 
         return new ProjectConfig(root, name, version,
-                new Documentation(style, customFile), indent, lineEnding);
+                new Documentation(style, customFile), indent, lineEnding, publicVariableStyle);
     }
 
     private static Path resolveInside(Path root, String configured, String label) {

@@ -34,7 +34,7 @@ class ValidationTest {
                 functions:
                   - name: SendData
                     return: int
-                    parameters: [uint8_t buffer, uint32_t len]
+                    parameters: [42]
                 """);
 
         assertEquals(1, cli.run("generate"));
@@ -44,8 +44,8 @@ class ValidationTest {
         assertTrue(error.contains("\u001B[1;36mExample YAML\u001B[0m"));
         assertTrue(error.contains("""
                 parameters:
-                  - { type: uint8_t *, name: buffer }
-                  - { type: uint32_t, name: len }"""));
+                  - uint8_t *buffer
+                  - uint32_t len"""));
     }
 
     @Test

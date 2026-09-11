@@ -7,6 +7,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Pattern;
 
 final class Values {
@@ -127,6 +128,72 @@ final class Values {
             index++;
         }
         return result;
+    }
+
+    static List<Map<String, Object>> itemList(Map<String, Object> map, String key, String context, String example,
+                                              Function<String, Map<String, Object>> compact) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        int index = 0;
+        for (Object value : optionalList(map, key, context)) {
+            String itemContext = context + "." + key + "[" + index + "]";
+            if (value instanceof String text) {
+                result.add(compact.apply(text));
+            } else if (value instanceof Map<?, ?> raw) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                for (Map.Entry<?, ?> entry : raw.entrySet()) {
+                    if (!(entry.getKey() instanceof String text)) {
+                        throw new CGenException(itemContext + " contains a non-text key");
+                    }
+                    item.put(text, entry.getValue());
+                }
+                result.add(item);
+            } else {
+                String message = itemContext + " must be a mapping or a \"type name\" string";
+                if (example != null) {
+                    throw new CGenException(message, "Example YAML", example);
+                }
+                throw new CGenException(message);
+            }
+            index++;
+        }
+        return result;
+    }
+
+    static Map<String, Object> compactField(String text, String context) {
+        String trimmed = text.strip();
+        int splitIndex = -1;
+        for (int i = trimmed.length() - 1; i >= 0; i--) {
+            char c = trimmed.charAt(i);
+            if (!(Character.isLetterOrDigit(c) || c == '_')) {
+                splitIndex = i;
+                break;
+            }
+        }
+        if (splitIndex < 0 || splitIndex == trimmed.length() - 1) {
+            throw new CGenException(context + " must be \"type name\", got '" + text + "'");
+        }
+        String name = trimmed.substring(splitIndex + 1);
+        String type = trimmed.substring(0, splitIndex + 1).strip();
+        if (type.isBlank() || !C_IDENTIFIER.matcher(name).matches()) {
+            throw new CGenException(context + " must be \"type name\", got '" + text + "'");
+        }
+        Map<String, Object> result = new LinkedHashMap<>();
+        result.put("type", type);
+        result.put("name", name);
+        return result;
+    }
+
+    static Map<String, Object> compactVariable(String text, String context) {
+        List<String> tokens = new ArrayList<>(List.of(text.strip().split("\\s+")));
+        boolean isPublic = !tokens.isEmpty() && tokens.get(tokens.size() - 1).equals("public");
+        if (isPublic) {
+            tokens.remove(tokens.size() - 1);
+        }
+        Map<String, Object> field = compactField(String.join(" ", tokens), context);
+        if (isPublic) {
+            field.put("visibility", "public");
+        }
+        return field;
     }
 
     static String identifier(String value, String context) {
