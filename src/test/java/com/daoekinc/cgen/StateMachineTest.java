@@ -14,7 +14,7 @@ class StateMachineTest {
     Path temporaryDirectory;
 
     @Test
-    void generatesStateMachineInOwnSubfolderAndPreservesUserRegions() throws Exception {
+    void generatesStateMachineNextToYamlAndPreservesUserRegions() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));
 
@@ -44,8 +44,8 @@ class StateMachineTest {
 
         assertEquals(0, cli.run("generate"));
 
-        Path headerPath = specDirectory.resolve("door/door.h");
-        Path sourcePath = specDirectory.resolve("door/door.c");
+        Path headerPath = specDirectory.resolve("door.h");
+        Path sourcePath = specDirectory.resolve("door.c");
         assertTrue(Files.isRegularFile(headerPath));
         assertTrue(Files.isRegularFile(sourcePath));
 

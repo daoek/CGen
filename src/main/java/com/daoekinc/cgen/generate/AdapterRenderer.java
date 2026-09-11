@@ -24,7 +24,7 @@ final class AdapterRenderer {
         out.append(docs.file(adapter.header(), adapter.description())).append('\n');
         String guard = macro(adapter.header());
         out.append("#ifndef ").append(guard).append("\n#define ").append(guard).append("\n\n");
-        Path directory = adapter.source().getParent().resolve(adapter.name());
+        Path directory = adapter.source().getParent();
         List<String> contractIncludes = List.of(
                 quotedRelative(directory, from.source().getParent().resolve(from.header())),
                 quotedRelative(directory, to.source().getParent().resolve(to.header())));

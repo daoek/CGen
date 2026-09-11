@@ -180,10 +180,11 @@ the first time the accessor is called:
 
 ## State machine YAML
 
-A state machine YAML generates its header/source pair into its own
-`<name>/` subfolder next to the YAML (e.g. `door.state-machine.yaml` ->
-`door/door.h`, `door/door.c`), so multiple specs in one directory don't dump
-a flat pile of headers and sources.
+A state machine YAML and its generated header/source live in the same
+directory (e.g. `door.state-machine.yaml` -> `door.h`, `door.c`), same as
+module. To lay a project out with generators sorted into folders, move the
+YAML itself into that folder — CGen scans by directory, so the generated
+files simply follow it there.
 
 ```yaml
 kind: state-machine
@@ -232,8 +233,8 @@ state/event combination with no matching transition both fall through to
 
 Fans a single call out to every subscriber implementing an existing
 `interface` — that interface's functions must all return `void` (there is no
-sensible way to aggregate N subscriber return values). Header/source go into
-their own `<name>/` subfolder, same as state machines.
+sensible way to aggregate N subscriber return values). Header/source live
+next to the YAML, same as state machine and module.
 
 ```yaml
 kind: observer
@@ -255,8 +256,8 @@ fan-out is fully mechanical; put your logic in the modules that implement
 
 ## Command table YAML
 
-A generic UART/CLI-style opcode dispatcher. Header/source go into their own
-`<name>/` subfolder.
+A generic UART/CLI-style opcode dispatcher. Header/source live next to the
+YAML.
 
 ```yaml
 kind: command-table
@@ -285,8 +286,8 @@ An opcode with no matching command falls through to `command.unknown`.
 
 ## Status codes YAML
 
-A standalone, header-only (no source, no subfolder) shared status enum plus
-checking macros. Purely additive — it does not change how existing
+A standalone, header-only (no source file) shared status enum plus checking
+macros. Purely additive — it does not change how existing
 `interface.yaml` files declare their own `invalidReturn`/`uninitializedReturn`.
 
 ```yaml
@@ -316,8 +317,8 @@ Generates `cgen_status_t` plus:
 ## Adapter YAML
 
 Glue between two existing, incompatible interfaces — typically a project's
-own contract (`from`) and a vendor HAL (`to`). Header/source go into their
-own `<name>/` subfolder.
+own contract (`from`) and a vendor HAL (`to`). Header/source live next to
+the YAML.
 
 ```yaml
 kind: adapter

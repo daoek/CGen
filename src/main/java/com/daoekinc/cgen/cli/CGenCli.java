@@ -248,10 +248,21 @@ public final class CGenCli {
         }
         ProjectConfig project = projects.findAndLoad(workingDirectory);
         Path scope = projects.existingDirectory(project, args.length == 2 ? resolveDirectory(args[1]) : workingDirectory);
-        List<Path> files = generator.generate(project, scope);
-        files.forEach(path -> out.println("Generated " + project.root().relativize(path)));
+        List<Path> files = generator.generate(project, scope,
+                (completed, total, path) -> printProgress(completed, total, project.root().relativize(path)));
+        if (!files.isEmpty()) {
+            out.println();
+        }
         out.println(files.size() + " file(s) generated");
         return 0;
+    }
+
+    private void printProgress(int completed, int total, Path relativePath) {
+        int width = 30;
+        int filled = (int) Math.round((completed / (double) total) * width);
+        String bar = GREEN + "#".repeat(filled) + RESET + "-".repeat(width - filled);
+        out.print("\r[" + bar + "] " + completed + "/" + total + "  " + relativePath + "[K");
+        out.flush();
     }
 
     private int detach(String[] args) {

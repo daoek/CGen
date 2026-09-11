@@ -43,6 +43,10 @@ public final class CGenerator {
     }
 
     public List<Path> generate(ProjectConfig project, Path scope) {
+        return generate(project, scope, (completed, total, path) -> { });
+    }
+
+    public List<Path> generate(ProjectConfig project, Path scope, ProgressListener progress) {
         DocumentationRenderer documentation = new DocumentationRenderer(project, yamlFiles);
         Map<String, InterfaceSpec> interfaces = loadInterfaces(project);
         List<ModulePlan> modules = new ArrayList<>();
@@ -85,9 +89,8 @@ public final class CGenerator {
         }
         for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
             StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
-            Path directory = machine.source().getParent().resolve(machine.name());
-            Path header = directory.resolve(machine.header());
-            Path source = directory.resolve(machine.sourceFile());
+            Path header = machine.source().getParent().resolve(machine.header());
+            Path source = machine.source().getParent().resolve(machine.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
             UserRegions headerRegions = tags.readForGeneration(header);
@@ -106,9 +109,8 @@ public final class CGenerator {
             ObserverSpec observer = ObserverSpec.from(path, yamlFiles.load(path));
             InterfaceSpec listener = resolveInterface(interfaces, observer.interfaceName(), path, "interface");
             requireVoidFunctions(listener, path, "observer listener");
-            Path directory = observer.source().getParent().resolve(observer.name());
-            Path header = directory.resolve(observer.header());
-            Path source = directory.resolve(observer.sourceFile());
+            Path header = observer.source().getParent().resolve(observer.header());
+            Path source = observer.source().getParent().resolve(observer.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
             UserRegions headerRegions = tags.readForGeneration(header);
@@ -118,9 +120,8 @@ public final class CGenerator {
         }
         for (Path path : specificationFiles(scope, ".command-table.yaml", project)) {
             CommandTableSpec table = CommandTableSpec.from(path, yamlFiles.load(path));
-            Path directory = table.source().getParent().resolve(table.name());
-            Path header = directory.resolve(table.header());
-            Path source = directory.resolve(table.sourceFile());
+            Path header = table.source().getParent().resolve(table.header());
+            Path source = table.source().getParent().resolve(table.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
             UserRegions headerRegions = tags.readForGeneration(header);
@@ -133,9 +134,8 @@ public final class CGenerator {
             InterfaceSpec from = resolveInterface(interfaces, adapter.from(), path, "from");
             InterfaceSpec to = resolveInterface(interfaces, adapter.to(), path, "to");
             Map<String, String> mappings = resolveAdapterMappings(adapter, from, to, path);
-            Path directory = adapter.source().getParent().resolve(adapter.name());
-            Path header = directory.resolve(adapter.header());
-            Path source = directory.resolve(adapter.sourceFile());
+            Path header = adapter.source().getParent().resolve(adapter.header());
+            Path source = adapter.source().getParent().resolve(adapter.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
             UserRegions headerRegions = tags.readForGeneration(header);
@@ -145,8 +145,19 @@ public final class CGenerator {
             outputs.add(new Output(source, adapterRenderer.renderSource(project, adapter, from, to, mappings, documentation, sourceRegions)));
         }
 
-        outputs.forEach(output -> tags.writeGenerated(output.path(), output.content(), project.lineEnding()));
+        int total = outputs.size();
+        int[] completed = {0};
+        for (Output output : outputs) {
+            tags.writeGenerated(output.path(), output.content(), project.lineEnding());
+            completed[0]++;
+            progress.onFileGenerated(completed[0], total, output.path());
+        }
         return outputs.stream().map(Output::path).toList();
+    }
+
+    @FunctionalInterface
+    public interface ProgressListener {
+        void onFileGenerated(int completed, int total, Path path);
     }
 
     public List<Path> cleanTags(ProjectConfig project, Path scope) {
@@ -169,8 +180,7 @@ public final class CGenerator {
         }
         for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
             StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
-            Path directory = path.getParent().resolve(machine.name());
-            for (Path output : List.of(directory.resolve(machine.header()), directory.resolve(machine.sourceFile()))) {
+            for (Path output : List.of(path.getParent().resolve(machine.header()), path.getParent().resolve(machine.sourceFile()))) {
                 if (Files.isRegularFile(output) && tags.stripTags(output)) {
                     cleaned.add(output);
                 }
@@ -185,8 +195,7 @@ public final class CGenerator {
         }
         for (Path path : specificationFiles(scope, ".observer.yaml", project)) {
             ObserverSpec observer = ObserverSpec.from(path, yamlFiles.load(path));
-            Path directory = path.getParent().resolve(observer.name());
-            for (Path output : List.of(directory.resolve(observer.header()), directory.resolve(observer.sourceFile()))) {
+            for (Path output : List.of(path.getParent().resolve(observer.header()), path.getParent().resolve(observer.sourceFile()))) {
                 if (Files.isRegularFile(output) && tags.stripTags(output)) {
                     cleaned.add(output);
                 }
@@ -194,8 +203,7 @@ public final class CGenerator {
         }
         for (Path path : specificationFiles(scope, ".command-table.yaml", project)) {
             CommandTableSpec table = CommandTableSpec.from(path, yamlFiles.load(path));
-            Path directory = path.getParent().resolve(table.name());
-            for (Path output : List.of(directory.resolve(table.header()), directory.resolve(table.sourceFile()))) {
+            for (Path output : List.of(path.getParent().resolve(table.header()), path.getParent().resolve(table.sourceFile()))) {
                 if (Files.isRegularFile(output) && tags.stripTags(output)) {
                     cleaned.add(output);
                 }
@@ -203,8 +211,7 @@ public final class CGenerator {
         }
         for (Path path : specificationFiles(scope, ".adapter.yaml", project)) {
             AdapterSpec adapter = AdapterSpec.from(path, yamlFiles.load(path));
-            Path directory = path.getParent().resolve(adapter.name());
-            for (Path output : List.of(directory.resolve(adapter.header()), directory.resolve(adapter.sourceFile()))) {
+            for (Path output : List.of(path.getParent().resolve(adapter.header()), path.getParent().resolve(adapter.sourceFile()))) {
                 if (Files.isRegularFile(output) && tags.stripTags(output)) {
                     cleaned.add(output);
                 }

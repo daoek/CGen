@@ -22,7 +22,7 @@ final class ObserverRenderer {
         out.append(docs.file(observer.header(), observer.description())).append('\n');
         String guard = macro(observer.header());
         out.append("#ifndef ").append(guard).append("\n#define ").append(guard).append("\n\n");
-        String listenerInclude = quotedRelative(observer.source().getParent().resolve(observer.name()),
+        String listenerInclude = quotedRelative(observer.source().getParent(),
                 listener.source().getParent().resolve(listener.header()));
         appendIncludes(out, List.of("<stdbool.h>", "<stdint.h>", listenerInclude), observer.includes());
         out.append(user.render("observer.header.preamble", "")).append('\n');

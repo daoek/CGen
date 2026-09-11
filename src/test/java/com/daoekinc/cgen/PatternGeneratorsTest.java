@@ -81,8 +81,8 @@ class PatternGeneratorsTest {
                 """);
         assertEquals(0, cli.run("generate"));
 
-        String header = Files.readString(temporaryDirectory.resolve("button_events/button_events.h"));
-        String source = Files.readString(temporaryDirectory.resolve("button_events/button_events.c"));
+        String header = Files.readString(temporaryDirectory.resolve("button_events.h"));
+        String source = Files.readString(temporaryDirectory.resolve("button_events.c"));
         assertTrue(header.contains("const button_listener_interface_t *subscribers[BUTTON_EVENTS_CAPACITY];"));
         assertTrue(header.contains("bool button_events_subscribe(button_events_context_t *context, const button_listener_interface_t *subscriber);"));
         assertTrue(header.contains("void button_events_publish_on_click(button_events_context_t *context, uint32_t x);"));
@@ -104,8 +104,8 @@ class PatternGeneratorsTest {
                 """);
         assertEquals(0, cli.run("generate"));
 
-        String header = Files.readString(temporaryDirectory.resolve("uart_cmd/uart_cmd.h"));
-        String source = Files.readString(temporaryDirectory.resolve("uart_cmd/uart_cmd.c"));
+        String header = Files.readString(temporaryDirectory.resolve("uart_cmd.h"));
+        String source = Files.readString(temporaryDirectory.resolve("uart_cmd.c"));
         assertTrue(header.contains("UART_CMD_CMD_PING = 0"));
         assertTrue(header.contains("UART_CMD_CMD_RESET = 1"));
         assertTrue(source.contains("case UART_CMD_CMD_PING:"));
@@ -154,7 +154,7 @@ class PatternGeneratorsTest {
                 """);
         assertEquals(0, cli.run("generate"));
 
-        String source = Files.readString(temporaryDirectory.resolve("bus_adapter/bus_adapter.c"));
+        String source = Files.readString(temporaryDirectory.resolve("bus_adapter.c"));
         assertTrue(source.contains("cgen_result = bus_hal_send(adapter->target, data, length);"));
         assertTrue(source.contains("/*@CGen(+function.bus.reset.body)*/"));
         assertTrue(source.contains("interface->write = bus_adapter_bus_write;"));
