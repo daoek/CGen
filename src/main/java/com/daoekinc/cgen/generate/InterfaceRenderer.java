@@ -1,5 +1,6 @@
 package com.daoekinc.cgen.generate;
 
+import static com.daoekinc.cgen.generate.RenderSupport.appendEnums;
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
@@ -19,7 +20,7 @@ final class InterfaceRenderer {
 
         StringBuilder out = new StringBuilder();
         appendTop(out, spec, docs, user, guard);
-        appendEnums(out, project, spec, docs);
+        appendEnums(out, project, spec.enums(), docs);
         appendStructs(out, project, spec, docs);
         out.append(user.render("interface.declarations", "")).append('\n');
         appendInterfaceTable(out, project, spec);
@@ -35,26 +36,6 @@ final class InterfaceRenderer {
         out.append("#ifndef ").append(guard).append("\n#define ").append(guard).append("\n\n");
         appendIncludes(out, List.of("<stddef.h>"), spec.includes());
         out.append(user.render("interface.preamble", "")).append('\n');
-    }
-
-    private static void appendEnums(StringBuilder out, ProjectConfig project, InterfaceSpec spec, DocumentationRenderer docs) {
-        for (InterfaceSpec.EnumDef type : spec.enums()) {
-            out.append(CGenTag.generatedItem("enum", type.name())).append('\n');
-            out.append(docs.type(type.name(), type.description()));
-            out.append("typedef enum\n{\n");
-            for (int index = 0; index < type.values().size(); index++) {
-                InterfaceSpec.EnumValue value = type.values().get(index);
-                out.append(indent(project, 1)).append(value.name());
-                if (value.value() != null) {
-                    out.append(" = ").append(value.value());
-                }
-                if (index + 1 < type.values().size()) {
-                    out.append(',');
-                }
-                out.append('\n');
-            }
-            out.append("} ").append(type.name()).append(";\n\n");
-        }
     }
 
     private static void appendStructs(StringBuilder out, ProjectConfig project, InterfaceSpec spec, DocumentationRenderer docs) {

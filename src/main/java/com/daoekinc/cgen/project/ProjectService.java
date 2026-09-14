@@ -133,6 +133,14 @@ public final class ProjectService {
                 implements:%s
                 includes: []
 
+                # enums:
+                #   - name: mode_t
+                #     description: Operating mode
+                #     values:
+                #       - { name: MODE_OFF, value: 0 }
+                #       - { name: MODE_ON }
+                enums: []
+
                 # Members stored in %s_context_t.
                 context: []
 
@@ -141,6 +149,18 @@ public final class ProjectService {
                 #   - uint32_t transfer_count public   # compact form: "type name [public]"
                 #   - { type: bool, name: busy, visibility: private, initial: 'false', description: Busy flag }
                 variables: []
+
+                # Standalone functions (a function.<name>.body user region each), separate from
+                # any implemented interface's functions. visibility is private (static, default)
+                # or public (declared in the header).
+                # functions:
+                #   - name: initialize
+                #     return: bool
+                #     description: One-time module initialization
+                #     parameters: []
+                #     invalidReturn: false   # required for non-void return types
+                #     visibility: public
+                functions: []
 
                 # singleton: true generates a <name>_instance() accessor with lazy init.
                 singleton: false

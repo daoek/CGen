@@ -50,11 +50,32 @@ public record InterfaceSpec(
         String header = Values.outputFile(Values.optionalString(yaml, "header", name + "_I.h", context), ".h", context + ".header");
         String invalidReturn = Values.optionalString(yaml, "invalidReturn", null, context);
         String uninitializedReturn = Values.optionalString(yaml, "uninitializedReturn", invalidReturn, context);
-        List<String> includes = Values.stringList(yaml, "includes", context);
+        List<String> includes = Values.includeList(yaml, "includes", context);
 
+        List<EnumDef> enums = parseEnums(yaml, "enums", context);
+
+        List<StructDef> structs = new ArrayList<>();
+        for (Map<String, Object> item : Values.mapList(yaml, "structs", context)) {
+            String itemContext = context + ".structs";
+            Values.onlyKeys(item, itemContext, "name", "description", "fields");
+            String structName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
+            List<Field> fields = parseFields(item, "fields", itemContext);
+            if (fields.isEmpty()) {
+                throw new CGenException(itemContext + " struct " + structName + " needs at least one field");
+            }
+            structs.add(new StructDef(structName, Values.optionalString(item, "description", "", itemContext), fields));
+        }
+
+        List<Function> functions = parseFunctions(yaml, "functions", context, invalidReturn, uninitializedReturn);
+        Values.uniqueNames(structs.stream().map(StructDef::name).toList(), context + ".structs");
+        return new InterfaceSpec(source, name, description, header, invalidReturn, uninitializedReturn,
+                includes, List.copyOf(enums), List.copyOf(structs), List.copyOf(functions));
+    }
+
+    static List<EnumDef> parseEnums(Map<String, Object> yaml, String key, String context) {
         List<EnumDef> enums = new ArrayList<>();
-        for (Map<String, Object> item : Values.mapList(yaml, "enums", context)) {
-            String itemContext = context + ".enums";
+        for (Map<String, Object> item : Values.mapList(yaml, key, context)) {
+            String itemContext = context + "." + key;
             Values.onlyKeys(item, itemContext, "name", "description", "values");
             String enumName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
             List<EnumValue> values = new ArrayList<>();
@@ -70,50 +91,48 @@ public record InterfaceSpec(
             Values.uniqueNames(values.stream().map(EnumValue::name).toList(), itemContext + " enum " + enumName);
             enums.add(new EnumDef(enumName, Values.optionalString(item, "description", "", itemContext), List.copyOf(values)));
         }
+        Values.uniqueNames(enums.stream().map(EnumDef::name).toList(), context + "." + key);
+        return List.copyOf(enums);
+    }
 
-        List<StructDef> structs = new ArrayList<>();
-        for (Map<String, Object> item : Values.mapList(yaml, "structs", context)) {
-            String itemContext = context + ".structs";
-            Values.onlyKeys(item, itemContext, "name", "description", "fields");
-            String structName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
-            List<Field> fields = parseFields(item, "fields", itemContext);
-            if (fields.isEmpty()) {
-                throw new CGenException(itemContext + " struct " + structName + " needs at least one field");
-            }
-            structs.add(new StructDef(structName, Values.optionalString(item, "description", "", itemContext), fields));
-        }
-
+    static List<Function> parseFunctions(Map<String, Object> yaml, String key, String context,
+                                         String defaultInvalidReturn, String defaultUninitializedReturn) {
         List<Function> functions = new ArrayList<>();
-        List<Map<String, Object>> functionItems = Values.mapList(yaml, "functions", context);
+        List<Map<String, Object>> functionItems = Values.mapList(yaml, key, context);
         for (int functionIndex = 0; functionIndex < functionItems.size(); functionIndex++) {
             Map<String, Object> item = functionItems.get(functionIndex);
-            String itemContext = context + ".functions[" + functionIndex + "]";
+            String itemContext = context + "." + key + "[" + functionIndex + "]";
             Values.onlyKeys(item, itemContext, "name", "return", "description", "parameters", "invalidReturn", "uninitializedReturn");
-            String functionName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
-            String returnType = oneLine(Values.optionalString(item, "return", "void", itemContext), itemContext + ".return");
-            List<Parameter> parameters = parseParameters(item, "parameters", itemContext, "function " + functionName);
-            String functionInvalidReturn = Values.optionalString(item, "invalidReturn", invalidReturn, itemContext);
-            if (!returnType.equals("void") && functionInvalidReturn == null) {
-                throw new CGenException(itemContext + ".invalidReturn is required for non-void function '" + functionName + "'",
-                        "Example YAML", "invalidReturn: -1");
-            }
-            if (functionInvalidReturn != null) {
-                functionInvalidReturn = oneLine(functionInvalidReturn, itemContext + ".invalidReturn");
-            }
-            String functionUninitializedReturn = Values.optionalString(item, "uninitializedReturn",
-                    uninitializedReturn != null ? uninitializedReturn : functionInvalidReturn, itemContext);
-            if (functionUninitializedReturn != null) {
-                functionUninitializedReturn = oneLine(functionUninitializedReturn, itemContext + ".uninitializedReturn");
-            }
-            functions.add(new Function(functionName, returnType,
-                    Values.optionalString(item, "description", functionName, itemContext), List.copyOf(parameters),
-                    functionInvalidReturn, functionUninitializedReturn));
+            functions.add(parseFunctionItem(item, itemContext, defaultInvalidReturn, defaultUninitializedReturn));
         }
-        Values.uniqueNames(functions.stream().map(Function::name).toList(), context + ".functions");
-        Values.uniqueNames(enums.stream().map(EnumDef::name).toList(), context + ".enums");
-        Values.uniqueNames(structs.stream().map(StructDef::name).toList(), context + ".structs");
-        return new InterfaceSpec(source, name, description, header, invalidReturn, uninitializedReturn,
-                includes, List.copyOf(enums), List.copyOf(structs), List.copyOf(functions));
+        Values.uniqueNames(functions.stream().map(Function::name).toList(), context + "." + key);
+        return List.copyOf(functions);
+    }
+
+    // Parses the fields common to a "functions" list item, without enforcing which keys are
+    // allowed - callers run their own Values.onlyKeys first, since a module function item
+    // permits an extra "visibility" key that an interface function item does not.
+    static Function parseFunctionItem(Map<String, Object> item, String itemContext,
+                                      String defaultInvalidReturn, String defaultUninitializedReturn) {
+        String functionName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
+        String returnType = oneLine(Values.optionalString(item, "return", "void", itemContext), itemContext + ".return");
+        List<Parameter> parameters = parseParameters(item, "parameters", itemContext, "function " + functionName);
+        String functionInvalidReturn = Values.optionalString(item, "invalidReturn", defaultInvalidReturn, itemContext);
+        if (!returnType.equals("void") && functionInvalidReturn == null) {
+            throw new CGenException(itemContext + ".invalidReturn is required for non-void function '" + functionName + "'",
+                    "Example YAML", "invalidReturn: -1");
+        }
+        if (functionInvalidReturn != null) {
+            functionInvalidReturn = oneLine(functionInvalidReturn, itemContext + ".invalidReturn");
+        }
+        String functionUninitializedReturn = Values.optionalString(item, "uninitializedReturn",
+                defaultUninitializedReturn != null ? defaultUninitializedReturn : functionInvalidReturn, itemContext);
+        if (functionUninitializedReturn != null) {
+            functionUninitializedReturn = oneLine(functionUninitializedReturn, itemContext + ".uninitializedReturn");
+        }
+        return new Function(functionName, returnType,
+                Values.optionalString(item, "description", functionName, itemContext), List.copyOf(parameters),
+                functionInvalidReturn, functionUninitializedReturn);
     }
 
     static List<Field> parseFields(Map<String, Object> map, String key, String context) {

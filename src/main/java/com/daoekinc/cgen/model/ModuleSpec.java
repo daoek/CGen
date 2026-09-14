@@ -14,13 +14,18 @@ public record ModuleSpec(
         String sourceFile,
         List<String> implementsInterfaces,
         List<String> includes,
+        List<InterfaceSpec.EnumDef> enums,
         List<InterfaceSpec.Field> context,
         List<Variable> variables,
+        List<Function> functions,
         boolean singleton,
         String instanceName,
         boolean singletonElse) {
 
     public record Variable(String type, String name, String description, Visibility visibility, String initial) {
+    }
+
+    public record Function(InterfaceSpec.Function spec, Visibility visibility) {
     }
 
     public enum Visibility {
@@ -31,12 +36,13 @@ public record ModuleSpec(
     public static ModuleSpec from(Path source, Map<String, Object> yaml) {
         String contextName = source.toString();
         Values.onlyKeys(yaml, contextName, "kind", "name", "description", "header", "source", "implements",
-                "includes", "context", "variables", "singleton", "instance", "singletonElse");
+                "includes", "enums", "context", "variables", "functions", "singleton", "instance", "singletonElse");
         if (!Values.requiredString(yaml, "kind", contextName).equals("module")) {
             throw new CGenException(contextName + ".kind must be module");
         }
         Values.CommonFields common = Values.commonFields(yaml, contextName, "module");
         String name = common.name();
+        List<InterfaceSpec.EnumDef> enums = InterfaceSpec.parseEnums(yaml, "enums", contextName);
         List<String> implemented = Values.stringList(yaml, "implements", contextName).stream()
                 .map(value -> Values.identifier(value, contextName + ".implements")).toList();
         Values.uniqueNames(implemented, contextName + ".implements");
@@ -68,12 +74,31 @@ public record ModuleSpec(
                     initial));
         }
         Values.uniqueNames(variables.stream().map(Variable::name).toList(), contextName + ".variables");
+
+        List<Function> functions = new ArrayList<>();
+        List<Map<String, Object>> functionItems = Values.mapList(yaml, "functions", contextName);
+        for (int index = 0; index < functionItems.size(); index++) {
+            Map<String, Object> item = functionItems.get(index);
+            String itemContext = contextName + ".functions[" + index + "]";
+            Values.onlyKeys(item, itemContext, "name", "return", "description", "parameters", "invalidReturn",
+                    "uninitializedReturn", "visibility");
+            String visibilityText = Values.optionalString(item, "visibility", "private", itemContext).toUpperCase();
+            Visibility visibility;
+            try {
+                visibility = Visibility.valueOf(visibilityText);
+            } catch (IllegalArgumentException exception) {
+                throw new CGenException(itemContext + ".visibility must be public or private");
+            }
+            functions.add(new Function(InterfaceSpec.parseFunctionItem(item, itemContext, null, null), visibility));
+        }
+        Values.uniqueNames(functions.stream().map(function -> function.spec().name()).toList(), contextName + ".functions");
+
         boolean singleton = Boolean.parseBoolean(Values.optionalString(yaml, "singleton", "false", contextName));
         String instanceName = Values.identifier(
                 Values.optionalString(yaml, "instance", name + "_instance", contextName), contextName + ".instance");
         boolean singletonElse = Boolean.parseBoolean(Values.optionalString(yaml, "singletonElse", "false", contextName));
         return new ModuleSpec(source, name, common.description(), common.header(), common.sourceFile(),
-                List.copyOf(implemented), common.includes(), common.context(), List.copyOf(variables), singleton,
-                instanceName, singletonElse);
+                List.copyOf(implemented), common.includes(), enums, common.context(), List.copyOf(variables), List.copyOf(functions),
+                singleton, instanceName, singletonElse);
     }
 }

@@ -1,5 +1,6 @@
 package com.daoekinc.cgen.generate;
 
+import static com.daoekinc.cgen.generate.RenderSupport.appendEnums;
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
@@ -24,9 +25,11 @@ final class ModuleRenderer {
 
         StringBuilder out = new StringBuilder();
         appendHeaderTop(out, module, interfaces, docs, user, guard);
+        appendEnums(out, project, module.enums(), docs);
         appendPublicVariableDeclarations(out, project, module, docs, accessors);
         appendContextStruct(out, project, module, interfaces);
         appendBindFunctionDeclarations(out, project, module, interfaces);
+        appendFunctionDeclarations(out, project, module, docs);
         appendSingletonDeclaration(out, module, interfaces);
         appendHeaderBottom(out, user, guard);
         return out.toString();
@@ -102,6 +105,26 @@ final class ModuleRenderer {
         }
     }
 
+    private static void appendFunctionDeclarations(StringBuilder out, ProjectConfig project, ModuleSpec module,
+                                                   DocumentationRenderer docs) {
+        for (ModuleSpec.Function moduleFunction : module.functions()) {
+            if (moduleFunction.visibility() != ModuleSpec.Visibility.PUBLIC) {
+                continue;
+            }
+            InterfaceSpec.Function function = moduleFunction.spec();
+            String name = functionName(project, function.name());
+            out.append(CGenTag.generatedItem("function", name)).append('\n');
+            out.append(docs.function(name, function.description(), function.returnType(), function.parameters()));
+            out.append(function.returnType()).append(' ').append(name).append('(');
+            if (function.parameters().isEmpty()) {
+                out.append("void");
+            } else {
+                appendParameters(out, function.parameters(), false);
+            }
+            out.append(");\n\n");
+        }
+    }
+
     private static void appendSingletonDeclaration(StringBuilder out, ModuleSpec module, List<InterfaceSpec> interfaces) {
         if (!module.singleton()) {
             return;
@@ -137,6 +160,7 @@ final class ModuleRenderer {
         for (InterfaceSpec contract : interfaces) {
             appendContractImplementation(out, project, module, contract, user);
         }
+        appendFunctionDefinitions(out, project, module, user);
         appendSingletonDefinition(out, project, module, user, interfaces);
         appendSourceBottom(out, user);
         return out.toString();
@@ -151,6 +175,8 @@ final class ModuleRenderer {
         }
         out.append('\n');
         out.append(user.render("module.source.includes", "")).append('\n');
+        out.append(user.render("module.source.variables", "")).append('\n');
+        out.append(user.render("module.source.prototypes", "")).append('\n');
     }
 
     private static void appendVariableDefinitions(StringBuilder out, ProjectConfig project, ModuleSpec module,
@@ -233,6 +259,38 @@ final class ModuleRenderer {
                     .append(functionName(project, module.name(), contract.name(), function.name())).append(";\n");
         }
         out.append(indent(project, 1)).append("}\n}\n\n");
+    }
+
+    private static void appendFunctionDefinitions(StringBuilder out, ProjectConfig project, ModuleSpec module, UserRegions user) {
+        for (ModuleSpec.Function moduleFunction : module.functions()) {
+            InterfaceSpec.Function function = moduleFunction.spec();
+            String name = functionName(project, function.name());
+            out.append(CGenTag.generatedItem("function", name)).append('\n');
+            if (moduleFunction.visibility() != ModuleSpec.Visibility.PUBLIC) {
+                out.append("static ");
+            }
+            out.append(function.returnType()).append(' ').append(name).append('(');
+            if (function.parameters().isEmpty()) {
+                out.append("void");
+            } else {
+                appendParameters(out, function.parameters(), false);
+            }
+            out.append(")\n{\n");
+            boolean returnsValue = !function.returnType().equals("void");
+            if (returnsValue) {
+                out.append(indent(project, 1)).append(function.returnType()).append(" cgen_result = ")
+                        .append(function.invalidReturn()).append(";\n");
+            }
+            for (InterfaceSpec.Parameter parameter : function.parameters()) {
+                appendUnusedSilencer(out, project, 1, parameter.name());
+            }
+            out.append('\n');
+            out.append(user.render("function." + function.name() + ".body", "", indent(project, 1)));
+            if (returnsValue) {
+                out.append(indent(project, 1)).append("return cgen_result;\n");
+            }
+            out.append("}\n\n");
+        }
     }
 
     private static void appendSingletonDefinition(StringBuilder out, ProjectConfig project, ModuleSpec module,

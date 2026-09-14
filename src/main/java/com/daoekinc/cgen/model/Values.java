@@ -102,6 +102,24 @@ final class Values {
         return List.copyOf(result);
     }
 
+    // A plain YAML double-quoted scalar like "osal.h" is consumed by the YAML parser -
+    // the string value is just osal.h, with no quote characters left to emit into
+    // "#include ...". Catch that here instead of silently generating invalid C.
+    static List<String> includeList(Map<String, Object> map, String key, String context) {
+        List<String> includes = stringList(map, key, context);
+        for (String include : includes) {
+            boolean angled = include.length() >= 2 && include.startsWith("<") && include.endsWith(">");
+            boolean quoted = include.length() >= 2 && include.startsWith("\"") && include.endsWith("\"");
+            if (!angled && !quoted) {
+                throw new CGenException(context + "." + key + " entry '" + include
+                        + "' must be wrapped in <...> or \"...\"; a YAML double-quoted string like \"osal.h\" "
+                        + "loses its quotes, so single-quote it in YAML: '\"osal.h\"'",
+                        "Example YAML", key + ":\n  - <stdint.h>\n  - '\"osal.h\"'");
+            }
+        }
+        return includes;
+    }
+
     static List<Map<String, Object>> mapList(Map<String, Object> map, String key, String context) {
         return mapList(map, key, context, null);
     }
@@ -168,7 +186,7 @@ final class Values {
         String description = optionalString(yaml, "description", name + " " + kindLabel, contextName);
         String header = outputFile(optionalString(yaml, "header", name + ".h", contextName), ".h", contextName + ".header");
         String sourceFile = outputFile(optionalString(yaml, "source", name + ".c", contextName), ".c", contextName + ".source");
-        List<String> includes = stringList(yaml, "includes", contextName);
+        List<String> includes = includeList(yaml, "includes", contextName);
         List<InterfaceSpec.Field> context = InterfaceSpec.parseFields(yaml, "context", contextName);
         return new CommonFields(name, description, header, sourceFile, includes, context);
     }

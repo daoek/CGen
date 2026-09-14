@@ -28,7 +28,7 @@ public record StatusCodesSpec(
         String description = Values.optionalString(yaml, "description", name + " status codes", contextName);
         String header = Values.outputFile(Values.optionalString(yaml, "header", name + ".h", contextName), ".h",
                 contextName + ".header");
-        List<String> includes = Values.stringList(yaml, "includes", contextName);
+        List<String> includes = Values.includeList(yaml, "includes", contextName);
 
         List<Code> codes = new ArrayList<>();
         List<Map<String, Object>> codeItems = Values.mapList(yaml, "codes", contextName,

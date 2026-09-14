@@ -226,6 +226,13 @@ source: ra_iic.c
 implements: [common_iic]
 includes: ['"vendor_i2c.h"']
 
+enums:
+  - name: ra_iic_mode_t
+    description: Operating mode
+    values:
+      - { name: RA_IIC_MODE_OFF, value: 0 }
+      - { name: RA_IIC_MODE_ON }
+
 context:
   - void *hardware
 
@@ -233,6 +240,10 @@ variables:
   - uint32_t transfer_count public
   - bool busy
 ```
+
+`enums` declares module-private `typedef enum` types in the header, ahead of
+the context struct and variables, so `context`/`variables` entries can use
+them as a field type - same shape as [interface enums](#interface-yaml).
 
 Variables default to `private` (`static` storage) — write just `type name`.
 Append a trailing `public` to expose one, or use the map form
@@ -252,6 +263,35 @@ uint32_t ra_iic_get_transfer_count(void)
 /*@CGen usercode-*/
 }
 ```
+
+A module can also declare its own standalone functions, independent of any
+implemented interface:
+
+```yaml
+functions:
+  - name: initialize
+    return: bool
+    description: One-time module initialization
+    parameters: []
+    invalidReturn: false
+    visibility: public
+```
+
+This generates `initialize(void)` - unlike bind/accessor functions, the
+module name is not prefixed, so the C identifier is exactly `name` (or with
+parameters, same `"type name"`/map shorthand as elsewhere) - with a
+`function.initialize.body` user region seeded with `cgen_result = false;`
+before it and `return cgen_result;` after - same shape as an interface
+function, but not part of an interface's function-pointer table, so no
+`void *context` first parameter is added implicitly; take one yourself as an
+explicit parameter if the function needs one. `invalidReturn` is required
+for any non-`void` return type (there's no interface-level default to fall
+back on here). Since the name isn't module-prefixed, keep it unique
+yourself across a module's functions and its implemented interfaces.
+
+`visibility` is `private` (default) or `public`, same meaning as on
+`variables`: `private` emits a `static` function defined only in the source
+(no header declaration); `public` declares it in the header too.
 
 Set `singleton: true` to also generate a lazy-init accessor instead of relying
 on an externally supplied context:

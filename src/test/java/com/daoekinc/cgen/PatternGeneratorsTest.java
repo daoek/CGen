@@ -62,6 +62,115 @@ class PatternGeneratorsTest {
     }
 
     @Test
+    void generatesModuleEnumsUsableByContextFields() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("logger.module.yaml"), """
+                kind: module
+                name: logger
+                implements: []
+                includes: []
+                enums:
+                  - name: logger_mode_t
+                    description: Operating mode
+                    values:
+                      - { name: LOGGER_MODE_OFF, value: 0 }
+                      - { name: LOGGER_MODE_ON }
+                context:
+                  - logger_mode_t mode
+                variables: []
+                singleton: false
+                """);
+        assertEquals(0, cli.run("generate"));
+
+        String header = Files.readString(temporaryDirectory.resolve("logger.h"));
+        assertTrue(header.contains("typedef enum\n{\n    LOGGER_MODE_OFF = 0,\n    LOGGER_MODE_ON\n} logger_mode_t;"));
+        int enumIndex = header.indexOf("logger_mode_t;");
+        int contextIndex = header.indexOf("logger_context_t");
+        assertTrue(enumIndex > 0 && enumIndex < contextIndex, "enum must be declared before the context struct");
+        assertTrue(header.contains("logger_mode_t mode;"));
+    }
+
+    @Test
+    void generatesPrivateModuleFunctionByDefault() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("core.module.yaml"), """
+                kind: module
+                name: core
+                implements: []
+                includes: []
+                context: []
+                variables: []
+                functions:
+                  - name: initialize_core
+                    return: bool
+                    description: Initialize the core; safe to call more than once
+                    parameters: []
+                    invalidReturn: false
+                singleton: false
+                """);
+        assertEquals(0, cli.run("generate"));
+
+        String header = Files.readString(temporaryDirectory.resolve("core.h"));
+        String source = Files.readString(temporaryDirectory.resolve("core.c"));
+        assertFalse(header.contains("initialize_core"), "private function must not be declared in the header");
+        assertTrue(source.contains("static bool initialize_core(void)\n{"));
+        assertTrue(source.contains("bool cgen_result = false;"));
+        assertTrue(source.contains("/*@CGen usercode+ function.initialize_core.body*/"));
+        assertTrue(source.contains("return cgen_result;"));
+    }
+
+    @Test
+    void generatesPublicModuleFunctionWhenRequested() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("core.module.yaml"), """
+                kind: module
+                name: core
+                implements: []
+                includes: []
+                context: []
+                variables: []
+                functions:
+                  - name: initialize_core
+                    return: bool
+                    parameters: []
+                    invalidReturn: false
+                    visibility: public
+                singleton: false
+                """);
+        assertEquals(0, cli.run("generate"));
+
+        String header = Files.readString(temporaryDirectory.resolve("core.h"));
+        String source = Files.readString(temporaryDirectory.resolve("core.c"));
+        assertTrue(header.contains("bool initialize_core(void);"));
+        assertTrue(source.contains("bool initialize_core(void)\n{"));
+        assertFalse(source.contains("static bool initialize_core"));
+    }
+
+    @Test
+    void requiresInvalidReturnForNonVoidModuleFunction() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("core.module.yaml"), """
+                kind: module
+                name: core
+                implements: []
+                includes: []
+                context: []
+                variables: []
+                functions:
+                  - name: initialize_core
+                    return: bool
+                    parameters: []
+                singleton: false
+                """);
+        assertEquals(1, cli.run("generate"));
+        assertTrue(cli.errors().contains("invalidReturn is required for non-void function 'initialize_core'"));
+    }
+
+    @Test
     void generatesSingletonElseBranchWhenRequested() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));

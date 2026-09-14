@@ -2,6 +2,7 @@ package com.daoekinc.cgen.generate;
 
 import com.daoekinc.cgen.model.InterfaceSpec;
 import com.daoekinc.cgen.model.ProjectConfig;
+import com.daoekinc.cgen.tag.CGenTag;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -33,6 +34,26 @@ final class RenderSupport {
             }
             appendTypedName(out, parameter.type(), parameter.name());
             comma = true;
+        }
+    }
+
+    static void appendEnums(StringBuilder out, ProjectConfig project, List<InterfaceSpec.EnumDef> enums, DocumentationRenderer docs) {
+        for (InterfaceSpec.EnumDef type : enums) {
+            out.append(CGenTag.generatedItem("enum", type.name())).append('\n');
+            out.append(docs.type(type.name(), type.description()));
+            out.append("typedef enum\n{\n");
+            for (int index = 0; index < type.values().size(); index++) {
+                InterfaceSpec.EnumValue value = type.values().get(index);
+                out.append(indent(project, 1)).append(value.name());
+                if (value.value() != null) {
+                    out.append(" = ").append(value.value());
+                }
+                if (index + 1 < type.values().size()) {
+                    out.append(',');
+                }
+                out.append('\n');
+            }
+            out.append("} ").append(type.name()).append(";\n\n");
         }
     }
 
