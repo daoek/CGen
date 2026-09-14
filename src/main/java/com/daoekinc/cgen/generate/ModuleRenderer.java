@@ -155,6 +155,7 @@ final class ModuleRenderer {
 
         StringBuilder out = new StringBuilder();
         appendSourceTop(out, module, docs, user);
+        appendPrivateFunctionPrototypes(out, project, module);
         appendVariableDefinitions(out, project, module, docs, accessors);
         appendAccessorDefinitions(out, project, module, user, accessors);
         for (InterfaceSpec contract : interfaces) {
@@ -177,6 +178,27 @@ final class ModuleRenderer {
         out.append(user.render("module.source.includes", "")).append('\n');
         out.append(user.render("module.source.variables", "")).append('\n');
         out.append(user.render("module.source.prototypes", "")).append('\n');
+    }
+
+    private static void appendPrivateFunctionPrototypes(StringBuilder out, ProjectConfig project, ModuleSpec module) {
+        List<ModuleSpec.Function> privateFunctions = module.functions().stream()
+                .filter(function -> function.visibility() != ModuleSpec.Visibility.PUBLIC).toList();
+        if (privateFunctions.isEmpty()) {
+            return;
+        }
+        out.append(CGenTag.generatedItem("function-prototypes", module.name())).append('\n');
+        for (ModuleSpec.Function moduleFunction : privateFunctions) {
+            InterfaceSpec.Function function = moduleFunction.spec();
+            String name = functionName(project, function.name());
+            out.append("static ").append(function.returnType()).append(' ').append(name).append('(');
+            if (function.parameters().isEmpty()) {
+                out.append("void");
+            } else {
+                appendParameters(out, function.parameters(), false);
+            }
+            out.append(");\n");
+        }
+        out.append('\n');
     }
 
     private static void appendVariableDefinitions(StringBuilder out, ProjectConfig project, ModuleSpec module,
