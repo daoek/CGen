@@ -51,7 +51,7 @@ public final class CGenerator {
     }
 
     public List<Path> generate(ProjectConfig project, Path scope) {
-        return generate(project, scope, false, (completed, total, path) -> { });
+        return generate(project, scope, false, (completed, total, specSource, outputPath, existed, regionsCarried) -> { });
     }
 
     public List<Path> generate(ProjectConfig project, Path scope, ProgressListener progress) {
@@ -84,8 +84,10 @@ public final class CGenerator {
             }
             Path output = spec.source().getParent().resolve(spec.header()).toAbsolutePath().normalize();
             requireUniqueDestination(destinations, output);
+            boolean existed = Files.exists(output);
             UserRegions regions = tags.readForGeneration(output, force);
-            outputs.add(new Output(output, interfaceRenderer.render(project, spec, documentation, regions)));
+            outputs.add(new Output(spec.source(), output, interfaceRenderer.render(project, spec, documentation, regions),
+                    existed, regions.regionCount()));
         }
         for (ModulePlan plan : modules) {
             ModuleSpec module = plan.module();
@@ -93,11 +95,15 @@ public final class CGenerator {
             Path source = module.source().getParent().resolve(module.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            boolean headerExisted = Files.exists(header);
+            boolean sourceExisted = Files.exists(source);
             UserRegions headerRegions = tags.readForGeneration(header, force);
             UserRegions sourceRegions = tags.readForGeneration(source, force);
             removeGeneratedFunctionDefaults(project, interfaces.values(), sourceRegions);
-            outputs.add(new Output(header, moduleRenderer.renderHeader(project, module, plan.interfaces(), documentation, headerRegions)));
-            outputs.add(new Output(source, moduleRenderer.renderSource(project, module, plan.interfaces(), documentation, sourceRegions)));
+            outputs.add(new Output(module.source(), header, moduleRenderer.renderHeader(project, module, plan.interfaces(), documentation, headerRegions),
+                    headerExisted, headerRegions.regionCount()));
+            outputs.add(new Output(module.source(), source, moduleRenderer.renderSource(project, module, plan.interfaces(), documentation, sourceRegions),
+                    sourceExisted, sourceRegions.regionCount()));
         }
         for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
             StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
@@ -105,17 +111,23 @@ public final class CGenerator {
             Path source = machine.source().getParent().resolve(machine.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            boolean headerExisted = Files.exists(header);
+            boolean sourceExisted = Files.exists(source);
             UserRegions headerRegions = tags.readForGeneration(header, force);
             UserRegions sourceRegions = tags.readForGeneration(source, force);
-            outputs.add(new Output(header, stateMachineRenderer.renderHeader(project, machine, documentation, headerRegions)));
-            outputs.add(new Output(source, stateMachineRenderer.renderSource(project, machine, documentation, sourceRegions)));
+            outputs.add(new Output(machine.source(), header, stateMachineRenderer.renderHeader(project, machine, documentation, headerRegions),
+                    headerExisted, headerRegions.regionCount()));
+            outputs.add(new Output(machine.source(), source, stateMachineRenderer.renderSource(project, machine, documentation, sourceRegions),
+                    sourceExisted, sourceRegions.regionCount()));
         }
         for (Path path : specificationFiles(scope, ".status-codes.yaml", project)) {
             StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));
             Path output = path.getParent().resolve(status.header()).toAbsolutePath().normalize();
             requireUniqueDestination(destinations, output);
+            boolean existed = Files.exists(output);
             UserRegions regions = tags.readForGeneration(output, force);
-            outputs.add(new Output(output, statusCodesRenderer.render(project, status, documentation, regions)));
+            outputs.add(new Output(status.source(), output, statusCodesRenderer.render(project, status, documentation, regions),
+                    existed, regions.regionCount()));
         }
         for (Path path : specificationFiles(scope, ".observer.yaml", project)) {
             ObserverSpec observer = ObserverSpec.from(path, yamlFiles.load(path));
@@ -125,10 +137,14 @@ public final class CGenerator {
             Path source = observer.source().getParent().resolve(observer.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            boolean headerExisted = Files.exists(header);
+            boolean sourceExisted = Files.exists(source);
             UserRegions headerRegions = tags.readForGeneration(header, force);
             UserRegions sourceRegions = tags.readForGeneration(source, force);
-            outputs.add(new Output(header, observerRenderer.renderHeader(project, observer, listener, documentation, headerRegions)));
-            outputs.add(new Output(source, observerRenderer.renderSource(project, observer, listener, documentation, sourceRegions)));
+            outputs.add(new Output(observer.source(), header, observerRenderer.renderHeader(project, observer, listener, documentation, headerRegions),
+                    headerExisted, headerRegions.regionCount()));
+            outputs.add(new Output(observer.source(), source, observerRenderer.renderSource(project, observer, listener, documentation, sourceRegions),
+                    sourceExisted, sourceRegions.regionCount()));
         }
         for (Path path : specificationFiles(scope, ".command-table.yaml", project)) {
             CommandTableSpec table = CommandTableSpec.from(path, yamlFiles.load(path));
@@ -136,10 +152,14 @@ public final class CGenerator {
             Path source = table.source().getParent().resolve(table.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            boolean headerExisted = Files.exists(header);
+            boolean sourceExisted = Files.exists(source);
             UserRegions headerRegions = tags.readForGeneration(header, force);
             UserRegions sourceRegions = tags.readForGeneration(source, force);
-            outputs.add(new Output(header, commandTableRenderer.renderHeader(project, table, documentation, headerRegions)));
-            outputs.add(new Output(source, commandTableRenderer.renderSource(project, table, documentation, sourceRegions)));
+            outputs.add(new Output(table.source(), header, commandTableRenderer.renderHeader(project, table, documentation, headerRegions),
+                    headerExisted, headerRegions.regionCount()));
+            outputs.add(new Output(table.source(), source, commandTableRenderer.renderSource(project, table, documentation, sourceRegions),
+                    sourceExisted, sourceRegions.regionCount()));
         }
         for (Path path : specificationFiles(scope, ".adapter.yaml", project)) {
             AdapterSpec adapter = AdapterSpec.from(path, yamlFiles.load(path));
@@ -150,11 +170,15 @@ public final class CGenerator {
             Path source = adapter.source().getParent().resolve(adapter.sourceFile());
             requireUniqueDestination(destinations, header.toAbsolutePath().normalize());
             requireUniqueDestination(destinations, source.toAbsolutePath().normalize());
+            boolean headerExisted = Files.exists(header);
+            boolean sourceExisted = Files.exists(source);
             UserRegions headerRegions = tags.readForGeneration(header, force);
             UserRegions sourceRegions = tags.readForGeneration(source, force);
             removeGeneratedFunctionDefaults(project, List.of(from), sourceRegions);
-            outputs.add(new Output(header, adapterRenderer.renderHeader(project, adapter, from, to, documentation, headerRegions)));
-            outputs.add(new Output(source, adapterRenderer.renderSource(project, adapter, from, to, mappings, documentation, sourceRegions)));
+            outputs.add(new Output(adapter.source(), header, adapterRenderer.renderHeader(project, adapter, from, to, documentation, headerRegions),
+                    headerExisted, headerRegions.regionCount()));
+            outputs.add(new Output(adapter.source(), source, adapterRenderer.renderSource(project, adapter, from, to, mappings, documentation, sourceRegions),
+                    sourceExisted, sourceRegions.regionCount()));
         }
 
         int total = outputs.size();
@@ -162,14 +186,14 @@ public final class CGenerator {
         for (Output output : outputs) {
             tags.writeGenerated(output.path(), output.content(), project.lineEnding());
             completed[0]++;
-            progress.onFileGenerated(completed[0], total, output.path());
+            progress.onFileGenerated(completed[0], total, output.specSource(), output.path(), output.existed(), output.regionsCarried());
         }
         return outputs.stream().map(Output::path).toList();
     }
 
     @FunctionalInterface
     public interface ProgressListener {
-        void onFileGenerated(int completed, int total, Path path);
+        void onFileGenerated(int completed, int total, Path specSource, Path outputPath, boolean existed, int regionsCarried);
     }
 
     public List<Path> cleanTags(ProjectConfig project, Path scope) {
@@ -489,6 +513,6 @@ public final class CGenerator {
     public record DetachResult(List<Path> cleanedFiles, List<Path> deletedConfigurationFiles) {
     }
 
-    private record Output(Path path, String content) {
+    private record Output(Path specSource, Path path, String content, boolean existed, int regionsCarried) {
     }
 }

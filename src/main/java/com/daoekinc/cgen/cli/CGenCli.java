@@ -218,27 +218,47 @@ public final class CGenCli {
 
     private int generate(String[] args) {
         boolean force = false;
+        boolean verbose = false;
         Path directory = workingDirectory;
         boolean directorySpecified = false;
         for (int index = 1; index < args.length; index++) {
             if (args[index].equals("-f") || args[index].equals("--force")) {
                 force = true;
+            } else if (args[index].equals("-v") || args[index].equals("--verbose")) {
+                verbose = true;
             } else if (!directorySpecified) {
                 directory = resolveDirectory(args[index]);
                 directorySpecified = true;
             } else {
-                throw new CGenException("Usage: CGen generate [directory] [-f|--force]");
+                throw new CGenException("Usage: CGen generate [directory] [-f|--force] [-v|--verbose]");
             }
         }
         ProjectConfig project = projects.findAndLoad(workingDirectory);
         Path scope = projects.existingDirectory(project, directory);
-        List<Path> files = generator.generate(project, scope, force,
-                (completed, total, path) -> printProgress(completed, total, project.root().relativize(path)));
+        if (verbose) {
+            out.println("Project root: " + project.root());
+            out.println("Scope: " + scope);
+        }
+        List<Path> files = generator.generate(project, scope, force, progressListener(project, verbose));
         if (!files.isEmpty()) {
             out.println();
         }
         out.println(files.size() + " file(s) generated");
         return 0;
+    }
+
+    private CGenerator.ProgressListener progressListener(ProjectConfig project, boolean verbose) {
+        if (!verbose) {
+            return (completed, total, specSource, outputPath, existed, regionsCarried) ->
+                    printProgress(completed, total, project.root().relativize(outputPath));
+        }
+        return (completed, total, specSource, outputPath, existed, regionsCarried) -> {
+            String status = !existed ? "new file"
+                    : regionsCarried == 0 ? "regenerated, no user regions found"
+                    : "regenerated, " + regionsCarried + " user region(s) carried over";
+            out.println("[" + completed + "/" + total + "] " + project.root().relativize(specSource)
+                    + " -> " + project.root().relativize(outputPath) + " (" + status + ")");
+        };
     }
 
     private void printProgress(int completed, int total, Path relativePath) {
@@ -259,8 +279,7 @@ public final class CGenCli {
             out.println("Moved " + project.root().relativize(move.from()) + " -> " + project.root().relativize(move.to()));
         }
         out.println("Renamed module '" + result.oldName() + "' to '" + result.newName() + "'");
-        List<Path> files = generator.generate(project, project.root(), false,
-                (completed, total, path) -> printProgress(completed, total, project.root().relativize(path)));
+        List<Path> files = generator.generate(project, project.root(), false, progressListener(project, false));
         if (!files.isEmpty()) {
             out.println();
         }
@@ -329,13 +348,18 @@ public final class CGenCli {
                   CGen create command-table <name> [directory]
                   CGen create status-codes <name> [directory]
                   CGen create adapter <name> --from <interface> --to <interface> [directory]
-                  CGen gen | generate [directory] [-f|--force]
+                  CGen gen | generate [directory] [-f|--force] [-v|--verbose]
                   CGen rename module <old-name> <new-name>
                   CGen detach
 
                 -f, --force
                   init: overwrite an existing cgen.yaml instead of refusing.
                   generate: overwrite files on disk that aren't CGen-generated instead of refusing.
+
+                -v, --verbose
+                  generate: print the project root, scope, and for every output file which
+                  spec produced it, whether it's new or was regenerated, and how many user
+                  regions were carried over - instead of the progress bar.
                 """);
     }
 }

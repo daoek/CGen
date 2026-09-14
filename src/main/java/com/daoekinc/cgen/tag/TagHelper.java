@@ -120,6 +120,11 @@ public final class TagHelper {
             this.values = new LinkedHashMap<>(values);
         }
 
+        /** Number of user regions read back from the previous generation of this file. */
+        public int regionCount() {
+            return values.size();
+        }
+
         public String render(String name, String defaultBody) {
             return render(name, defaultBody, "");
         }
