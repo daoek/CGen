@@ -3,6 +3,7 @@ package com.daoekinc.cgen.generate;
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
 import static com.daoekinc.cgen.generate.RenderSupport.appendUnusedSilencer;
+import static com.daoekinc.cgen.generate.RenderSupport.functionName;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 
@@ -21,7 +22,7 @@ final class CommandTableRenderer {
         appendHeaderTop(out, table, docs, user, guard);
         appendCommandEnum(out, project, table, docs);
         appendHeaderContextStruct(out, project, table);
-        appendDispatchDeclaration(out, table);
+        appendDispatchDeclaration(out, project, table);
         appendHeaderBottom(out, user, guard);
         return out.toString();
     }
@@ -65,9 +66,10 @@ final class CommandTableRenderer {
         out.append("} ").append(table.name()).append("_context_t;\n\n");
     }
 
-    private static void appendDispatchDeclaration(StringBuilder out, CommandTableSpec table) {
-        out.append(CGenTag.generatedItem("function", "dispatch")).append('\n');
-        out.append("void ").append(table.name()).append("_dispatch(").append(table.name()).append("_context_t *context, ")
+    private static void appendDispatchDeclaration(StringBuilder out, ProjectConfig project, CommandTableSpec table) {
+        String dispatch = functionName(project, table.name(), "dispatch");
+        out.append(CGenTag.generatedItem("function", dispatch)).append('\n');
+        out.append("void ").append(dispatch).append('(').append(table.name()).append("_context_t *context, ")
                 .append(table.name()).append("_command_t command, const uint8_t *payload, uint32_t length);\n\n");
     }
 
@@ -95,8 +97,9 @@ final class CommandTableRenderer {
 
     private static void appendCommandHandlers(StringBuilder out, ProjectConfig project, CommandTableSpec table, UserRegions user) {
         for (CommandTableSpec.Command command : table.commands()) {
-            out.append(CGenTag.generatedItem("private-function", table.name() + "_handle_" + command.name())).append('\n');
-            out.append("static void ").append(table.name()).append("_handle_").append(command.name())
+            String handle = functionName(project, table.name(), "handle", command.name());
+            out.append(CGenTag.generatedItem("private-function", handle)).append('\n');
+            out.append("static void ").append(handle)
                     .append('(').append(table.name()).append("_context_t *context, const uint8_t *payload, uint32_t length)\n{\n");
             appendUnusedSilencer(out, project, 1, "context");
             appendUnusedSilencer(out, project, 1, "payload");
@@ -108,13 +111,14 @@ final class CommandTableRenderer {
     }
 
     private static void appendDispatchFunction(StringBuilder out, ProjectConfig project, CommandTableSpec table, UserRegions user) {
-        out.append(CGenTag.generatedItem("function", "dispatch")).append('\n');
-        out.append("void ").append(table.name()).append("_dispatch(").append(table.name()).append("_context_t *context, ")
+        String dispatch = functionName(project, table.name(), "dispatch");
+        out.append(CGenTag.generatedItem("function", dispatch)).append('\n');
+        out.append("void ").append(dispatch).append('(').append(table.name()).append("_context_t *context, ")
                 .append(table.name()).append("_command_t command, const uint8_t *payload, uint32_t length)\n{\n");
         out.append(indent(project, 1)).append("switch (command)\n").append(indent(project, 1)).append("{\n");
         for (CommandTableSpec.Command command : table.commands()) {
             out.append(indent(project, 2)).append("case ").append(constant(table, command.name())).append(":\n");
-            out.append(indent(project, 3)).append(table.name()).append("_handle_").append(command.name())
+            out.append(indent(project, 3)).append(functionName(project, table.name(), "handle", command.name()))
                     .append("(context, payload, length);\n");
             out.append(indent(project, 3)).append("break;\n\n");
         }

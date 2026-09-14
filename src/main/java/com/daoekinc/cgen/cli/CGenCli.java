@@ -56,6 +56,7 @@ public final class CGenCli {
                 case "init" -> init(args);
                 case "create" -> create(args);
                 case "gen", "generate" -> generate(args);
+                case "rename" -> rename(args);
                 case "detach" -> detach(args);
                 default -> throw new CGenException("Unknown command '" + args[0] + "'");
             };
@@ -248,6 +249,25 @@ public final class CGenCli {
         out.flush();
     }
 
+    private int rename(String[] args) {
+        if (args.length != 4 || !args[1].equals("module")) {
+            throw new CGenException("Usage: CGen rename module <old-name> <new-name>");
+        }
+        ProjectConfig project = projects.findAndLoad(workingDirectory);
+        CGenerator.RenameResult result = generator.renameModule(project, args[2], args[3]);
+        for (CGenerator.Move move : result.movedFiles()) {
+            out.println("Moved " + project.root().relativize(move.from()) + " -> " + project.root().relativize(move.to()));
+        }
+        out.println("Renamed module '" + result.oldName() + "' to '" + result.newName() + "'");
+        List<Path> files = generator.generate(project, project.root(), false,
+                (completed, total, path) -> printProgress(completed, total, project.root().relativize(path)));
+        if (!files.isEmpty()) {
+            out.println();
+        }
+        out.println(files.size() + " file(s) generated");
+        return 0;
+    }
+
     private int detach(String[] args) {
         if (args.length != 1) {
             throw new CGenException("Usage: CGen detach");
@@ -310,6 +330,7 @@ public final class CGenCli {
                   CGen create status-codes <name> [directory]
                   CGen create adapter <name> --from <interface> --to <interface> [directory]
                   CGen gen | generate [directory] [-f|--force]
+                  CGen rename module <old-name> <new-name>
                   CGen detach
 
                 -f, --force

@@ -1,6 +1,7 @@
 package com.daoekinc.cgen;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Files;
@@ -13,7 +14,7 @@ class PatternGeneratorsTest {
     Path temporaryDirectory;
 
     @Test
-    void generatesSingletonAccessorForModule() throws Exception {
+    void generatesRunOnceSingletonForModuleWithoutContextOrInterfaces() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));
         Files.writeString(temporaryDirectory.resolve("logger.module.yaml"), """
@@ -29,10 +30,58 @@ class PatternGeneratorsTest {
 
         String header = Files.readString(temporaryDirectory.resolve("logger.h"));
         String source = Files.readString(temporaryDirectory.resolve("logger.c"));
+        assertFalse(header.contains("logger_context_t"));
+        assertTrue(header.contains("void logger_instance(void);"));
+        assertFalse(source.contains("logger_context_t"));
+        assertTrue(source.contains("if (!logger_singleton_initialized)"));
+        assertTrue(source.contains("void logger_instance(void)"));
+    }
+
+    @Test
+    void generatesPointerReturningSingletonWhenContextIsPresent() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("logger.module.yaml"), """
+                kind: module
+                name: logger
+                implements: []
+                includes: []
+                context:
+                  - uint32_t line_count
+                variables: []
+                singleton: true
+                """);
+        assertEquals(0, cli.run("generate"));
+
+        String header = Files.readString(temporaryDirectory.resolve("logger.h"));
+        String source = Files.readString(temporaryDirectory.resolve("logger.c"));
         assertTrue(header.contains("logger_context_t *logger_instance(void);"));
         assertTrue(source.contains("static logger_context_t logger_singleton_context;"));
         assertTrue(source.contains("if (!logger_singleton_initialized)"));
         assertTrue(source.contains("return &logger_singleton_context;"));
+    }
+
+    @Test
+    void generatesSingletonElseBranchWhenRequested() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("logger.module.yaml"), """
+                kind: module
+                name: logger
+                implements: []
+                includes: []
+                context:
+                  - uint32_t line_count
+                variables: []
+                singleton: true
+                singletonElse: true
+                """);
+        assertEquals(0, cli.run("generate"));
+
+        String source = Files.readString(temporaryDirectory.resolve("logger.c"));
+        assertTrue(source.contains("if (!logger_singleton_initialized)"));
+        assertTrue(source.contains("else\n    {"));
+        assertTrue(source.contains("singleton.else"));
     }
 
     @Test

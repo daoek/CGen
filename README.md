@@ -112,6 +112,30 @@ CGen create status-codes cgen_status
 CGen create adapter bus_adapter --from bus --to bus_hal
 ```
 
+### Nested projects (importing a library)
+
+A directory tree with its own `cgen.yaml` is a separate, self-contained
+project, even when it lives inside another project's directory tree. This is
+how you vendor or import another CGen-based library without it being pulled
+into (and regenerated or overwritten by) the enclosing project:
+
+```
+firmware/
+  cgen.yaml                        # outer project
+  drivers/common/ra_iic.module.yaml
+  Lib/importedlib/
+    cgen.yaml                      # its own project - a boundary starts here
+    sensor.interface.yaml
+```
+
+Running `CGen generate` (or `detach`) from `firmware/` scans its own tree but
+stops at `Lib/importedlib/` the moment it sees that directory's `cgen.yaml`;
+nothing underneath it (however deep) is scanned, generated, or deleted.
+`CGen create ... Lib/importedlib` from the outer project is refused for the
+same reason - you'd be writing into someone else's project with the wrong
+`cgen.yaml` rules. To work on the nested project, run `CGen` from inside it;
+it resolves its own `cgen.yaml` and generates with its own settings.
+
 ## Project configuration
 
 ```yaml
@@ -243,6 +267,15 @@ the first time the accessor is called:
 ```c
 /*@CGen usercode+ singleton.init*/
 /* One-time setup for the singleton instance. */
+/*@CGen usercode-*/
+```
+
+Set `singletonElse: true` to also emit an `else` branch that runs on every
+call after the first, with its own `singleton.else` user region:
+
+```c
+/*@CGen usercode+ singleton.else*/
+/* Runs on every call after the singleton is already initialized. */
 /*@CGen usercode-*/
 ```
 

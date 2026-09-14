@@ -115,4 +115,46 @@ class YamlErgonomicsTest {
         assertEquals(0, cli.run("gen"));
         assertTrue(Files.readString(sourcePath).contains(customSet));
     }
+
+    @Test
+    void functionNamingCamelCaseAppliesToFunctionsButNotTypes() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Path project = temporaryDirectory.resolve("cgen.yaml");
+        Files.writeString(project, Files.readString(project).replace(
+                "format:\n  indent: 4\n  lineEnding: lf",
+                "format:\n  indent: 4\n  lineEnding: lf\n  functionNaming: camelCase"));
+
+        Files.writeString(temporaryDirectory.resolve("my_sensor.interface.yaml"), """
+                kind: interface
+                name: my_sensor
+                includes: []
+                functions:
+                  - name: init
+                    return: int
+                    invalidReturn: -1
+                    description: Initialize the interface
+                    parameters: []
+                """);
+        Files.writeString(temporaryDirectory.resolve("motor_driver.module.yaml"), """
+                kind: module
+                name: motor_driver
+                implements: [my_sensor]
+                includes: []
+                context: []
+                variables: []
+                """);
+        assertEquals(0, cli.run("generate"));
+
+        String interfaceHeader = Files.readString(temporaryDirectory.resolve("my_sensor_I.h"));
+        assertTrue(interfaceHeader.contains("static inline int mySensorInit(const my_sensor_interface_t * const interface)"));
+
+        String moduleHeader = Files.readString(temporaryDirectory.resolve("motor_driver.h"));
+        String moduleSource = Files.readString(temporaryDirectory.resolve("motor_driver.c"));
+        assertTrue(moduleHeader.contains("typedef void motor_driver_context_t;"));
+        assertTrue(moduleHeader.contains("void motorDriverBindMySensor(my_sensor_interface_t *interface, motor_driver_context_t *context);"));
+        assertTrue(moduleSource.contains("static int motorDriverMySensorInit(void *context)"));
+        assertTrue(moduleSource.contains("void motorDriverBindMySensor(my_sensor_interface_t *interface, motor_driver_context_t *context)"));
+        assertTrue(moduleSource.contains("interface->init = motorDriverMySensorInit;"));
+    }
 }

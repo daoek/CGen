@@ -42,6 +42,7 @@ public final class ProjectService {
                       lineEnding: lf
                       # suppressUnusedWarnings: false # emit (void)param; lines in generated stub bodies (default true)
                       # publicVariables: accessors # extern (default) or accessors (getter/setter functions)
+                      # functionNaming: camelCase # snake_case (default) or camelCase for generated function names
                     """.formatted(directoryName.replace("'", "''"));
             StandardOpenOption existsOption = force ? StandardOpenOption.TRUNCATE_EXISTING : StandardOpenOption.CREATE_NEW;
             Files.writeString(projectFile, content, StandardCharsets.UTF_8, StandardOpenOption.CREATE, existsOption);
@@ -80,7 +81,21 @@ public final class ProjectService {
                 uninitializedReturn: -2
 
                 includes: []
+
+                # enums:
+                #   - name: mode_t
+                #     description: Operating mode
+                #     values:
+                #       - { name: MODE_OFF, value: 0 }
+                #       - { name: MODE_ON }
                 enums: []
+
+                # structs:
+                #   - name: config_t
+                #     description: Interface configuration
+                #     fields:
+                #       - uint32_t baud_rate
+                #       - bool parity_enabled
                 structs: []
 
                 functions:
@@ -88,6 +103,8 @@ public final class ProjectService {
                     return: int
                     description: Initialize the interface
                     parameters: []
+                    # invalidReturn: -3       # override invalidReturn for just this function
+                    # uninitializedReturn: -4 # override uninitializedReturn for just this function
                 """.formatted(name, name, name);
         writeNew(spec, content);
         return spec;
@@ -120,11 +137,16 @@ public final class ProjectService {
                 context: []
 
                 # visibility is public (extern in header) or private (static in source).
+                # variables:
+                #   - uint32_t transfer_count public   # compact form: "type name [public]"
+                #   - { type: bool, name: busy, visibility: private, initial: 'false', description: Busy flag }
                 variables: []
 
                 # singleton: true generates a <name>_instance() accessor with lazy init.
                 singleton: false
-                """.formatted(name, name, name, name, implemented, name);
+                # instance: %s_instance # rename the generated singleton accessor function
+                # singletonElse: true # also emit an else branch (singleton.else) for already-initialized calls
+                """.formatted(name, name, name, name, implemented, name, name);
         writeNew(spec, content);
         return spec;
     }
@@ -155,9 +177,14 @@ public final class ProjectService {
                   - name: START
                     description: Begin running
                     parameters: []
+                    # parameters:
+                    #   - uint32_t speed
 
+                # guard: true adds a transition.<from>.<event>.guard user region that sets
+                # cgen_guard = false to block the transition at runtime.
                 transitions:
                   - { from: IDLE, event: START, to: RUNNING, guard: false }
+                  # - { from: IDLE, event: START, to: RUNNING, guard: false, description: Start the run }
                 """.formatted(name, name, name, name, name);
         writeNew(spec, content);
         return spec;
@@ -276,6 +303,7 @@ public final class ProjectService {
             if (!realDirectory.startsWith(realRoot)) {
                 throw new CGenException("Path resolves outside project: " + requested);
             }
+            requireNoNestedProjectBoundary(realRoot, realDirectory, requested);
             return realDirectory;
         } catch (IOException exception) {
             throw new CGenException("Cannot create directory " + normalized + ": " + exception.getMessage(), exception);
@@ -290,9 +318,28 @@ public final class ProjectService {
             if (!Files.isDirectory(realDirectory) || !realDirectory.startsWith(realRoot)) {
                 throw new CGenException("Directory must exist inside the project: " + requested);
             }
+            requireNoNestedProjectBoundary(realRoot, realDirectory, requested);
             return realDirectory;
         } catch (IOException exception) {
             throw new CGenException("Directory must exist inside the project: " + normalized, exception);
+        }
+    }
+
+    /**
+     * A subdirectory holding its own {@code cgen.yaml} is a separate, self-contained project
+     * (e.g. an imported library) - not scope of the enclosing one. Crossing into it from the
+     * enclosing project (creating specs there, or generating/scanning into it) would apply the
+     * wrong rules and could overwrite it; that subtree is only ever touched by running CGen
+     * from inside it, where {@link #findAndLoad} resolves its own {@code cgen.yaml}.
+     */
+    private static void requireNoNestedProjectBoundary(Path root, Path directory, Path requested) {
+        Path current = directory;
+        while (current != null && !current.equals(root)) {
+            if (Files.isRegularFile(current.resolve(PROJECT_FILE))) {
+                throw new CGenException(requested + " is inside a separate project rooted at " + current
+                        + " (it has its own " + PROJECT_FILE + "); run CGen commands from inside that project instead");
+            }
+            current = current.getParent();
         }
     }
 

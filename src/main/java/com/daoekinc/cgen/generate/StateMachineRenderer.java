@@ -4,6 +4,7 @@ import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
 import static com.daoekinc.cgen.generate.RenderSupport.appendUnusedSilencer;
+import static com.daoekinc.cgen.generate.RenderSupport.functionName;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 
@@ -22,8 +23,8 @@ final class StateMachineRenderer {
         appendHeaderTop(out, machine, docs, user, guard);
         appendStateEnum(out, project, machine, docs);
         appendHeaderContextStruct(out, project, machine);
-        appendCoreFunctionDeclarations(out, machine);
-        appendEventFunctionDeclarations(out, machine, docs);
+        appendCoreFunctionDeclarations(out, project, machine);
+        appendEventFunctionDeclarations(out, project, machine, docs);
         appendHeaderBottom(out, user, guard);
         return out.toString();
     }
@@ -62,24 +63,28 @@ final class StateMachineRenderer {
         out.append("} ").append(machine.name()).append("_context_t;\n\n");
     }
 
-    private static void appendCoreFunctionDeclarations(StringBuilder out, StateMachineSpec machine) {
-        out.append(CGenTag.generatedItem("function", "init")).append('\n');
-        out.append("void ").append(machine.name()).append("_init(").append(machine.name()).append("_context_t *context);\n\n");
+    private static void appendCoreFunctionDeclarations(StringBuilder out, ProjectConfig project, StateMachineSpec machine) {
+        String init = functionName(project, machine.name(), "init");
+        out.append(CGenTag.generatedItem("function", init)).append('\n');
+        out.append("void ").append(init).append('(').append(machine.name()).append("_context_t *context);\n\n");
 
-        out.append(CGenTag.generatedItem("function", "tick")).append('\n');
-        out.append("void ").append(machine.name()).append("_tick(").append(machine.name()).append("_context_t *context);\n\n");
+        String tick = functionName(project, machine.name(), "tick");
+        out.append(CGenTag.generatedItem("function", tick)).append('\n');
+        out.append("void ").append(tick).append('(').append(machine.name()).append("_context_t *context);\n\n");
 
-        out.append(CGenTag.generatedItem("function", "go_to_state")).append('\n');
-        out.append("void ").append(machine.name()).append("_go_to_state(").append(machine.name()).append("_context_t *context, ")
+        String goToState = functionName(project, machine.name(), "go_to_state");
+        out.append(CGenTag.generatedItem("function", goToState)).append('\n');
+        out.append("void ").append(goToState).append('(').append(machine.name()).append("_context_t *context, ")
                 .append(machine.name()).append("_state_t state);\n\n");
     }
 
-    private static void appendEventFunctionDeclarations(StringBuilder out, StateMachineSpec machine, DocumentationRenderer docs) {
+    private static void appendEventFunctionDeclarations(StringBuilder out, ProjectConfig project, StateMachineSpec machine,
+                                                         DocumentationRenderer docs) {
         for (StateMachineSpec.Event event : machine.events()) {
-            out.append(CGenTag.generatedItem("function", "on_" + event.name())).append('\n');
-            out.append(docs.function(machine.name() + "_on_" + event.name(), event.description(), "void", event.parameters()));
-            out.append("void ").append(machine.name()).append("_on_").append(event.name())
-                    .append("(").append(machine.name()).append("_context_t *context");
+            String onEvent = functionName(project, machine.name(), "on", event.name());
+            out.append(CGenTag.generatedItem("function", onEvent)).append('\n');
+            out.append(docs.function(onEvent, event.description(), "void", event.parameters()));
+            out.append("void ").append(onEvent).append('(').append(machine.name()).append("_context_t *context");
             appendParameters(out, event.parameters(), true);
             out.append(");\n\n");
         }
@@ -113,17 +118,17 @@ final class StateMachineRenderer {
 
     private static void appendEntryExitFunctions(StringBuilder out, ProjectConfig project, StateMachineSpec machine, UserRegions user) {
         for (StateMachineSpec.State state : machine.states()) {
-            out.append(CGenTag.generatedItem("private-function", machine.name() + "_enter_" + state.name())).append('\n');
-            out.append("static void ").append(machine.name()).append("_enter_").append(state.name())
-                    .append('(').append(machine.name()).append("_context_t *context)\n{\n");
+            String enter = functionName(project, machine.name(), "enter", state.name());
+            out.append(CGenTag.generatedItem("private-function", enter)).append('\n');
+            out.append("static void ").append(enter).append('(').append(machine.name()).append("_context_t *context)\n{\n");
             appendUnusedSilencer(out, project, 1, "context");
             out.append('\n');
             out.append(user.render("state." + state.name() + ".entry", "", indent(project, 1)));
             out.append("}\n\n");
 
-            out.append(CGenTag.generatedItem("private-function", machine.name() + "_exit_" + state.name())).append('\n');
-            out.append("static void ").append(machine.name()).append("_exit_").append(state.name())
-                    .append('(').append(machine.name()).append("_context_t *context)\n{\n");
+            String exit = functionName(project, machine.name(), "exit", state.name());
+            out.append(CGenTag.generatedItem("private-function", exit)).append('\n');
+            out.append("static void ").append(exit).append('(').append(machine.name()).append("_context_t *context)\n{\n");
             appendUnusedSilencer(out, project, 1, "context");
             out.append('\n');
             out.append(user.render("state." + state.name() + ".exit", "", indent(project, 1)));
@@ -132,16 +137,18 @@ final class StateMachineRenderer {
     }
 
     private static void appendInitFunction(StringBuilder out, ProjectConfig project, StateMachineSpec machine) {
-        out.append(CGenTag.generatedItem("function", "init")).append('\n');
-        out.append("void ").append(machine.name()).append("_init(").append(machine.name()).append("_context_t *context)\n{\n")
+        String init = functionName(project, machine.name(), "init");
+        out.append(CGenTag.generatedItem("function", init)).append('\n');
+        out.append("void ").append(init).append('(').append(machine.name()).append("_context_t *context)\n{\n")
                 .append(indent(project, 1)).append("context->state = ").append(stateConstant(machine, machine.initial())).append(";\n")
-                .append(indent(project, 1)).append(machine.name()).append("_enter_").append(machine.initial()).append("(context);\n")
+                .append(indent(project, 1)).append(functionName(project, machine.name(), "enter", machine.initial())).append("(context);\n")
                 .append("}\n\n");
     }
 
     private static void appendTickFunction(StringBuilder out, ProjectConfig project, StateMachineSpec machine, UserRegions user) {
-        out.append(CGenTag.generatedItem("function", "tick")).append('\n');
-        out.append("void ").append(machine.name()).append("_tick(").append(machine.name()).append("_context_t *context)\n{\n");
+        String tick = functionName(project, machine.name(), "tick");
+        out.append(CGenTag.generatedItem("function", tick)).append('\n');
+        out.append("void ").append(tick).append('(').append(machine.name()).append("_context_t *context)\n{\n");
         out.append(indent(project, 1)).append("switch (context->state)\n").append(indent(project, 1)).append("{\n");
         for (StateMachineSpec.State state : machine.states()) {
             out.append(indent(project, 2)).append("case ").append(stateConstant(machine, state.name())).append(":\n");
@@ -156,13 +163,14 @@ final class StateMachineRenderer {
     }
 
     private static void appendGoToStateFunction(StringBuilder out, ProjectConfig project, StateMachineSpec machine) {
-        out.append(CGenTag.generatedItem("function", "go_to_state")).append('\n');
-        out.append("void ").append(machine.name()).append("_go_to_state(").append(machine.name()).append("_context_t *context, ")
+        String goToState = functionName(project, machine.name(), "go_to_state");
+        out.append(CGenTag.generatedItem("function", goToState)).append('\n');
+        out.append("void ").append(goToState).append('(').append(machine.name()).append("_context_t *context, ")
                 .append(machine.name()).append("_state_t state)\n{\n");
         out.append(indent(project, 1)).append("switch (context->state)\n").append(indent(project, 1)).append("{\n");
         for (StateMachineSpec.State state : machine.states()) {
             out.append(indent(project, 2)).append("case ").append(stateConstant(machine, state.name())).append(":\n");
-            out.append(indent(project, 3)).append(machine.name()).append("_exit_").append(state.name()).append("(context);\n");
+            out.append(indent(project, 3)).append(functionName(project, machine.name(), "exit", state.name())).append("(context);\n");
             out.append(indent(project, 3)).append("break;\n\n");
         }
         out.append(indent(project, 2)).append("default:\n").append(indent(project, 3)).append("break;\n");
@@ -171,7 +179,7 @@ final class StateMachineRenderer {
         out.append(indent(project, 1)).append("switch (state)\n").append(indent(project, 1)).append("{\n");
         for (StateMachineSpec.State state : machine.states()) {
             out.append(indent(project, 2)).append("case ").append(stateConstant(machine, state.name())).append(":\n");
-            out.append(indent(project, 3)).append(machine.name()).append("_enter_").append(state.name()).append("(context);\n");
+            out.append(indent(project, 3)).append(functionName(project, machine.name(), "enter", state.name())).append("(context);\n");
             out.append(indent(project, 3)).append("break;\n\n");
         }
         out.append(indent(project, 2)).append("default:\n").append(indent(project, 3)).append("break;\n");
@@ -184,9 +192,9 @@ final class StateMachineRenderer {
             List<StateMachineSpec.Transition> handled = machine.transitions().stream()
                     .filter(transition -> event.name().equals(transition.event())).toList();
 
-            out.append(CGenTag.generatedItem("function", "on_" + event.name())).append('\n');
-            out.append("void ").append(machine.name()).append("_on_").append(event.name())
-                    .append("(").append(machine.name()).append("_context_t *context");
+            String onEvent = functionName(project, machine.name(), "on", event.name());
+            out.append(CGenTag.generatedItem("function", onEvent)).append('\n');
+            out.append("void ").append(onEvent).append('(').append(machine.name()).append("_context_t *context");
             appendParameters(out, event.parameters(), true);
             out.append(")\n{\n");
             out.append(indent(project, 1)).append("bool cgen_transitioned = false;\n");
@@ -224,10 +232,10 @@ final class StateMachineRenderer {
             out.append(indent(project, 3)).append("if (cgen_guard)\n").append(indent(project, 3)).append("{\n");
             bodyLevel = 4;
         }
-        out.append(indent(project, bodyLevel)).append(machine.name()).append("_exit_").append(transition.from()).append("(context);\n");
+        out.append(indent(project, bodyLevel)).append(functionName(project, machine.name(), "exit", transition.from())).append("(context);\n");
         out.append(user.render("transition." + regionKey + ".action", "", indent(project, bodyLevel)));
         out.append(indent(project, bodyLevel)).append("context->state = ").append(stateConstant(machine, transition.to())).append(";\n");
-        out.append(indent(project, bodyLevel)).append(machine.name()).append("_enter_").append(transition.to()).append("(context);\n");
+        out.append(indent(project, bodyLevel)).append(functionName(project, machine.name(), "enter", transition.to())).append("(context);\n");
         out.append(indent(project, bodyLevel)).append("cgen_transitioned = true;\n");
         if (transition.guard()) {
             out.append(indent(project, 3)).append("}\n");

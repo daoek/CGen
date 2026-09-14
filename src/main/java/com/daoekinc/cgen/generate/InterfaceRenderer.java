@@ -3,6 +3,7 @@ package com.daoekinc.cgen.generate;
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
+import static com.daoekinc.cgen.generate.RenderSupport.functionName;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 
@@ -84,10 +85,11 @@ final class InterfaceRenderer {
 
     private static void appendDispatchFunctions(StringBuilder out, ProjectConfig project, InterfaceSpec spec, DocumentationRenderer docs) {
         for (InterfaceSpec.Function function : spec.functions()) {
+            String dispatch = functionName(project, spec.name(), function.name());
             out.append(CGenTag.generatedItem("function", function.name())).append('\n');
-            out.append(docs.function(spec.name() + "_" + function.name(), function.description(), function.returnType(), function.parameters()));
-            out.append("static inline ").append(function.returnType()).append(' ').append(spec.name()).append('_')
-                    .append(function.name()).append("(const ").append(spec.name()).append("_interface_t * const interface");
+            out.append(docs.function(dispatch, function.description(), function.returnType(), function.parameters()));
+            out.append("static inline ").append(function.returnType()).append(' ').append(dispatch)
+                    .append("(const ").append(spec.name()).append("_interface_t * const interface");
             appendParameters(out, function.parameters(), true);
             out.append(")\n{\n");
             appendDispatchBody(out, project, function);

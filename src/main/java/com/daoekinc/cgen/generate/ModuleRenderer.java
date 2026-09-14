@@ -4,6 +4,7 @@ import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
 import static com.daoekinc.cgen.generate.RenderSupport.appendUnusedSilencer;
+import static com.daoekinc.cgen.generate.RenderSupport.functionName;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 import static com.daoekinc.cgen.generate.RenderSupport.quotedRelative;
@@ -25,8 +26,8 @@ final class ModuleRenderer {
         appendHeaderTop(out, module, interfaces, docs, user, guard);
         appendPublicVariableDeclarations(out, project, module, docs, accessors);
         appendContextStruct(out, project, module, interfaces);
-        appendBindFunctionDeclarations(out, module, interfaces);
-        appendSingletonDeclaration(out, module);
+        appendBindFunctionDeclarations(out, project, module, interfaces);
+        appendSingletonDeclaration(out, module, interfaces);
         appendHeaderBottom(out, user, guard);
         return out.toString();
     }
@@ -52,9 +53,9 @@ final class ModuleRenderer {
             if (accessors) {
                 out.append(CGenTag.generatedItem("public-accessor", variable.name())).append('\n');
                 out.append(docs.variable(variable.name(), variable.description()));
-                appendAccessorSignature(out, module, variable, true);
+                appendAccessorSignature(out, project, module, variable, true);
                 out.append(";\n");
-                appendAccessorSignature(out, module, variable, false);
+                appendAccessorSignature(out, project, module, variable, false);
                 out.append(";\n\n");
             } else {
                 out.append(CGenTag.generatedItem("public-variable", variable.name())).append('\n');
@@ -68,7 +69,8 @@ final class ModuleRenderer {
 
     private static void appendContextStruct(StringBuilder out, ProjectConfig project, ModuleSpec module,
                                              List<InterfaceSpec> interfaces) {
-        boolean needed = !module.context().isEmpty() || module.singleton() || !interfaces.isEmpty();
+        boolean needed = !module.context().isEmpty() || !interfaces.isEmpty()
+                || (module.singleton() && !isRunOnceSingleton(module, interfaces));
         if (!needed) {
             return;
         }
@@ -90,20 +92,32 @@ final class ModuleRenderer {
         out.append("} ").append(module.name()).append("_context_t;\n\n");
     }
 
-    private static void appendBindFunctionDeclarations(StringBuilder out, ModuleSpec module, List<InterfaceSpec> interfaces) {
+    private static void appendBindFunctionDeclarations(StringBuilder out, ProjectConfig project, ModuleSpec module,
+                                                        List<InterfaceSpec> interfaces) {
         for (InterfaceSpec contract : interfaces) {
-            String function = module.name() + "_bind_" + contract.name();
+            String function = functionName(project, module.name(), "bind", contract.name());
             out.append(CGenTag.generatedItem("bind-function", function)).append('\n');
             out.append("void ").append(function).append('(').append(contract.name()).append("_interface_t *interface, ")
                     .append(module.name()).append("_context_t *context);\n\n");
         }
     }
 
-    private static void appendSingletonDeclaration(StringBuilder out, ModuleSpec module) {
-        if (module.singleton()) {
-            out.append(CGenTag.generatedItem("function", module.name() + "_instance")).append('\n');
-            out.append(module.name()).append("_context_t *").append(module.name()).append("_instance(void);\n\n");
+    private static void appendSingletonDeclaration(StringBuilder out, ModuleSpec module, List<InterfaceSpec> interfaces) {
+        if (!module.singleton()) {
+            return;
         }
+        out.append(CGenTag.generatedItem("function", module.instanceName())).append('\n');
+        if (isRunOnceSingleton(module, interfaces)) {
+            out.append("void ").append(module.instanceName()).append("(void);\n\n");
+        } else {
+            out.append(module.name()).append("_context_t *").append(module.instanceName()).append("(void);\n\n");
+        }
+    }
+
+    // A singleton with no context fields and no bound interfaces has nothing to hand out a
+    // pointer to; it degenerates into a plain run-once function (e.g. one-time startup code).
+    private static boolean isRunOnceSingleton(ModuleSpec module, List<InterfaceSpec> interfaces) {
+        return module.singleton() && module.context().isEmpty() && interfaces.isEmpty();
     }
 
     private static void appendHeaderBottom(StringBuilder out, UserRegions user, String guard) {
@@ -123,7 +137,7 @@ final class ModuleRenderer {
         for (InterfaceSpec contract : interfaces) {
             appendContractImplementation(out, project, module, contract, user);
         }
-        appendSingletonDefinition(out, project, module, user);
+        appendSingletonDefinition(out, project, module, user, interfaces);
         appendSourceBottom(out, user);
         return out.toString();
     }
@@ -167,12 +181,12 @@ final class ModuleRenderer {
                 continue;
             }
             out.append(CGenTag.generatedItem("public-accessor", variable.name())).append('\n');
-            appendAccessorSignature(out, module, variable, true);
+            appendAccessorSignature(out, project, module, variable, true);
             out.append("\n{\n");
             out.append(user.render("variable." + variable.name() + ".get", indent(project, 1) + "return " + variable.name() + ";",
                     indent(project, 1)));
             out.append("}\n\n");
-            appendAccessorSignature(out, module, variable, false);
+            appendAccessorSignature(out, project, module, variable, false);
             out.append("\n{\n");
             out.append(user.render("variable." + variable.name() + ".set", indent(project, 1) + variable.name() + " = value;",
                     indent(project, 1)));
@@ -183,7 +197,7 @@ final class ModuleRenderer {
     private static void appendContractImplementation(StringBuilder out, ProjectConfig project, ModuleSpec module,
                                                       InterfaceSpec contract, UserRegions user) {
         for (InterfaceSpec.Function function : contract.functions()) {
-            String implementation = module.name() + "_" + contract.name() + "_" + function.name();
+            String implementation = functionName(project, module.name(), contract.name(), function.name());
             out.append(CGenTag.generatedItem("private-function", implementation)).append('\n');
             out.append("static ").append(function.returnType()).append(' ').append(implementation).append("(void *context");
             appendParameters(out, function.parameters(), true);
@@ -207,7 +221,7 @@ final class ModuleRenderer {
             out.append("}\n\n");
         }
 
-        String bind = module.name() + "_bind_" + contract.name();
+        String bind = functionName(project, module.name(), "bind", contract.name());
         out.append(CGenTag.generatedItem("bind-function", bind)).append('\n');
         out.append("void ").append(bind).append('(').append(contract.name()).append("_interface_t *interface, ")
                 .append(module.name()).append("_context_t *context)\n{\n")
@@ -216,26 +230,50 @@ final class ModuleRenderer {
                 .append(indent(project, 2)).append("interface->context = context;\n");
         for (InterfaceSpec.Function function : contract.functions()) {
             out.append(indent(project, 2)).append("interface->").append(function.name()).append(" = ")
-                    .append(module.name()).append('_').append(contract.name()).append('_').append(function.name()).append(";\n");
+                    .append(functionName(project, module.name(), contract.name(), function.name())).append(";\n");
         }
         out.append(indent(project, 1)).append("}\n}\n\n");
     }
 
-    private static void appendSingletonDefinition(StringBuilder out, ProjectConfig project, ModuleSpec module, UserRegions user) {
+    private static void appendSingletonDefinition(StringBuilder out, ProjectConfig project, ModuleSpec module,
+                                                  UserRegions user, List<InterfaceSpec> interfaces) {
         if (!module.singleton()) {
             return;
         }
-        out.append(CGenTag.generatedItem("function", module.name() + "_instance")).append('\n');
+        out.append(CGenTag.generatedItem("function", module.instanceName())).append('\n');
+        if (isRunOnceSingleton(module, interfaces)) {
+            out.append("static bool ").append(module.name()).append("_singleton_initialized = false;\n\n");
+            out.append("void ").append(module.instanceName()).append("(void)\n{\n")
+                    .append(indent(project, 1)).append("if (!").append(module.name()).append("_singleton_initialized)\n")
+                    .append(indent(project, 1)).append("{\n")
+                    .append(indent(project, 2)).append(module.name()).append("_singleton_initialized = true;\n");
+            out.append(user.render("singleton.init", "", indent(project, 2)));
+            out.append(indent(project, 1)).append("}\n");
+            appendSingletonElse(out, project, module, user);
+            out.append("}\n\n");
+            return;
+        }
         out.append("static ").append(module.name()).append("_context_t ").append(module.name()).append("_singleton_context;\n");
         out.append("static bool ").append(module.name()).append("_singleton_initialized = false;\n\n");
-        out.append(module.name()).append("_context_t *").append(module.name()).append("_instance(void)\n{\n")
+        out.append(module.name()).append("_context_t *").append(module.instanceName()).append("(void)\n{\n")
                 .append(indent(project, 1)).append("if (!").append(module.name()).append("_singleton_initialized)\n")
                 .append(indent(project, 1)).append("{\n")
                 .append(indent(project, 2)).append(module.name()).append("_singleton_initialized = true;\n");
         out.append(user.render("singleton.init", "", indent(project, 2)));
-        out.append(indent(project, 1)).append("}\n")
-                .append(indent(project, 1)).append("return &").append(module.name()).append("_singleton_context;\n")
+        out.append(indent(project, 1)).append("}\n");
+        appendSingletonElse(out, project, module, user);
+        out.append(indent(project, 1)).append("return &").append(module.name()).append("_singleton_context;\n")
                 .append("}\n\n");
+    }
+
+    private static void appendSingletonElse(StringBuilder out, ProjectConfig project, ModuleSpec module, UserRegions user) {
+        if (!module.singletonElse()) {
+            return;
+        }
+        out.append(indent(project, 1)).append("else\n")
+                .append(indent(project, 1)).append("{\n");
+        out.append(user.render("singleton.else", "", indent(project, 2)));
+        out.append(indent(project, 1)).append("}\n");
     }
 
     private static void appendSourceBottom(StringBuilder out, UserRegions user) {
@@ -243,15 +281,16 @@ final class ModuleRenderer {
         out.append(user.renderOrphans());
     }
 
-    private static void appendAccessorSignature(StringBuilder out, ModuleSpec module, ModuleSpec.Variable variable, boolean isGetter) {
+    private static void appendAccessorSignature(StringBuilder out, ProjectConfig project, ModuleSpec module,
+                                                ModuleSpec.Variable variable, boolean isGetter) {
         if (isGetter) {
             out.append(variable.type());
             if (!variable.type().stripTrailing().endsWith("*")) {
                 out.append(' ');
             }
-            out.append(module.name()).append("_get_").append(variable.name()).append("(void)");
+            out.append(functionName(project, module.name(), "get", variable.name())).append("(void)");
         } else {
-            out.append("void ").append(module.name()).append("_set_").append(variable.name()).append('(');
+            out.append("void ").append(functionName(project, module.name(), "set", variable.name())).append('(');
             appendTypedName(out, variable.type(), "value");
             out.append(')');
         }

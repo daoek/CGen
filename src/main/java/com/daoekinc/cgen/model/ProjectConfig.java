@@ -13,7 +13,8 @@ public record ProjectConfig(
         int indent,
         String lineEnding,
         String publicVariableStyle,
-        boolean suppressUnusedWarnings) {
+        boolean suppressUnusedWarnings,
+        boolean camelCaseFunctions) {
 
     public record Documentation(String style, Path customFile) {
     }
@@ -52,7 +53,8 @@ public record ProjectConfig(
         }
 
         Map<String, Object> format = Values.optionalMap(yaml, "format", context);
-        Values.onlyKeys(format, context + ".format", "indent", "lineEnding", "publicVariables", "suppressUnusedWarnings");
+        Values.onlyKeys(format, context + ".format", "indent", "lineEnding", "publicVariables", "suppressUnusedWarnings",
+                "functionNaming");
         int indent = Values.optionalInt(format, "indent", 4, context + ".format");
         if (indent < 2 || indent > 8) {
             throw new CGenException("format.indent must be between 2 and 8");
@@ -71,8 +73,15 @@ public record ProjectConfig(
         boolean suppressUnusedWarnings = Boolean.parseBoolean(
                 Values.optionalString(format, "suppressUnusedWarnings", "true", context + ".format"));
 
+        String functionNaming = Values.optionalString(format, "functionNaming", "snake_case", context + ".format");
+        if (!functionNaming.equals("snake_case") && !functionNaming.equals("camelCase")) {
+            throw new CGenException("format.functionNaming must be snake_case or camelCase");
+        }
+        boolean camelCaseFunctions = functionNaming.equals("camelCase");
+
         return new ProjectConfig(root, name, version,
-                new Documentation(style, customFile), indent, lineEnding, publicVariableStyle, suppressUnusedWarnings);
+                new Documentation(style, customFile), indent, lineEnding, publicVariableStyle, suppressUnusedWarnings,
+                camelCaseFunctions);
     }
 
     private static Path resolveInside(Path root, String configured, String label) {

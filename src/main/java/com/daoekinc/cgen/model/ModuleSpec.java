@@ -16,7 +16,9 @@ public record ModuleSpec(
         List<String> includes,
         List<InterfaceSpec.Field> context,
         List<Variable> variables,
-        boolean singleton) {
+        boolean singleton,
+        String instanceName,
+        boolean singletonElse) {
 
     public record Variable(String type, String name, String description, Visibility visibility, String initial) {
     }
@@ -29,7 +31,7 @@ public record ModuleSpec(
     public static ModuleSpec from(Path source, Map<String, Object> yaml) {
         String contextName = source.toString();
         Values.onlyKeys(yaml, contextName, "kind", "name", "description", "header", "source", "implements",
-                "includes", "context", "variables", "singleton");
+                "includes", "context", "variables", "singleton", "instance", "singletonElse");
         if (!Values.requiredString(yaml, "kind", contextName).equals("module")) {
             throw new CGenException(contextName + ".kind must be module");
         }
@@ -67,7 +69,11 @@ public record ModuleSpec(
         }
         Values.uniqueNames(variables.stream().map(Variable::name).toList(), contextName + ".variables");
         boolean singleton = Boolean.parseBoolean(Values.optionalString(yaml, "singleton", "false", contextName));
+        String instanceName = Values.identifier(
+                Values.optionalString(yaml, "instance", name + "_instance", contextName), contextName + ".instance");
+        boolean singletonElse = Boolean.parseBoolean(Values.optionalString(yaml, "singletonElse", "false", contextName));
         return new ModuleSpec(source, name, common.description(), common.header(), common.sourceFile(),
-                List.copyOf(implemented), common.includes(), common.context(), List.copyOf(variables), singleton);
+                List.copyOf(implemented), common.includes(), common.context(), List.copyOf(variables), singleton,
+                instanceName, singletonElse);
     }
 }

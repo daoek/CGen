@@ -3,6 +3,7 @@ package com.daoekinc.cgen.generate;
 import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
+import static com.daoekinc.cgen.generate.RenderSupport.functionName;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 import static com.daoekinc.cgen.generate.RenderSupport.quotedRelative;
@@ -24,8 +25,8 @@ final class ObserverRenderer {
         appendHeaderTop(out, observer, listener, docs, user, guard);
         appendCapacityMacro(out, observer, capacityMacro);
         appendHeaderContextStruct(out, project, observer, listener, capacityMacro);
-        appendCoreFunctionDeclarations(out, observer, listener);
-        appendPublishFunctionDeclarations(out, observer, listener, docs);
+        appendCoreFunctionDeclarations(out, project, observer, listener);
+        appendPublishFunctionDeclarations(out, project, observer, listener, docs);
         appendHeaderBottom(out, user, guard);
         return out.toString();
     }
@@ -61,26 +62,30 @@ final class ObserverRenderer {
         out.append("} ").append(observer.name()).append("_context_t;\n\n");
     }
 
-    private static void appendCoreFunctionDeclarations(StringBuilder out, ObserverSpec observer, InterfaceSpec listener) {
-        out.append(CGenTag.generatedItem("function", "init")).append('\n');
-        out.append("void ").append(observer.name()).append("_init(").append(observer.name()).append("_context_t *context);\n\n");
+    private static void appendCoreFunctionDeclarations(StringBuilder out, ProjectConfig project, ObserverSpec observer,
+                                                        InterfaceSpec listener) {
+        String init = functionName(project, observer.name(), "init");
+        out.append(CGenTag.generatedItem("function", init)).append('\n');
+        out.append("void ").append(init).append('(').append(observer.name()).append("_context_t *context);\n\n");
 
-        out.append(CGenTag.generatedItem("function", "subscribe")).append('\n');
-        out.append("bool ").append(observer.name()).append("_subscribe(").append(observer.name())
+        String subscribe = functionName(project, observer.name(), "subscribe");
+        out.append(CGenTag.generatedItem("function", subscribe)).append('\n');
+        out.append("bool ").append(subscribe).append('(').append(observer.name())
                 .append("_context_t *context, const ").append(listener.name()).append("_interface_t *subscriber);\n\n");
 
-        out.append(CGenTag.generatedItem("function", "unsubscribe")).append('\n');
-        out.append("bool ").append(observer.name()).append("_unsubscribe(").append(observer.name())
+        String unsubscribe = functionName(project, observer.name(), "unsubscribe");
+        out.append(CGenTag.generatedItem("function", unsubscribe)).append('\n');
+        out.append("bool ").append(unsubscribe).append('(').append(observer.name())
                 .append("_context_t *context, const ").append(listener.name()).append("_interface_t *subscriber);\n\n");
     }
 
-    private static void appendPublishFunctionDeclarations(StringBuilder out, ObserverSpec observer, InterfaceSpec listener,
-                                                           DocumentationRenderer docs) {
+    private static void appendPublishFunctionDeclarations(StringBuilder out, ProjectConfig project, ObserverSpec observer,
+                                                           InterfaceSpec listener, DocumentationRenderer docs) {
         for (InterfaceSpec.Function function : listener.functions()) {
-            out.append(CGenTag.generatedItem("function", "publish_" + function.name())).append('\n');
-            out.append(docs.function(observer.name() + "_publish_" + function.name(), function.description(), "void", function.parameters()));
-            out.append("void ").append(observer.name()).append("_publish_").append(function.name())
-                    .append('(').append(observer.name()).append("_context_t *context");
+            String publish = functionName(project, observer.name(), "publish", function.name());
+            out.append(CGenTag.generatedItem("function", publish)).append('\n');
+            out.append(docs.function(publish, function.description(), "void", function.parameters()));
+            out.append("void ").append(publish).append('(').append(observer.name()).append("_context_t *context");
             appendParameters(out, function.parameters(), true);
             out.append(");\n\n");
         }
@@ -115,16 +120,18 @@ final class ObserverRenderer {
     }
 
     private static void appendInitFunction(StringBuilder out, ProjectConfig project, ObserverSpec observer) {
-        out.append(CGenTag.generatedItem("function", "init")).append('\n');
-        out.append("void ").append(observer.name()).append("_init(").append(observer.name()).append("_context_t *context)\n{\n")
+        String init = functionName(project, observer.name(), "init");
+        out.append(CGenTag.generatedItem("function", init)).append('\n');
+        out.append("void ").append(init).append('(').append(observer.name()).append("_context_t *context)\n{\n")
                 .append(indent(project, 1)).append("context->count = 0U;\n")
                 .append("}\n\n");
     }
 
     private static void appendSubscribeFunction(StringBuilder out, ProjectConfig project, ObserverSpec observer,
                                                 InterfaceSpec listener, String capacityMacro) {
-        out.append(CGenTag.generatedItem("function", "subscribe")).append('\n');
-        out.append("bool ").append(observer.name()).append("_subscribe(").append(observer.name())
+        String subscribe = functionName(project, observer.name(), "subscribe");
+        out.append(CGenTag.generatedItem("function", subscribe)).append('\n');
+        out.append("bool ").append(subscribe).append('(').append(observer.name())
                 .append("_context_t *context, const ").append(listener.name()).append("_interface_t *subscriber)\n{\n");
         out.append(indent(project, 1)).append("bool cgen_result = false;\n\n");
         out.append(indent(project, 1)).append("if ((subscriber != NULL) && (context->count < ").append(capacityMacro).append("))\n");
@@ -150,8 +157,9 @@ final class ObserverRenderer {
     }
 
     private static void appendUnsubscribeFunction(StringBuilder out, ProjectConfig project, ObserverSpec observer, InterfaceSpec listener) {
-        out.append(CGenTag.generatedItem("function", "unsubscribe")).append('\n');
-        out.append("bool ").append(observer.name()).append("_unsubscribe(").append(observer.name())
+        String unsubscribe = functionName(project, observer.name(), "unsubscribe");
+        out.append(CGenTag.generatedItem("function", unsubscribe)).append('\n');
+        out.append("bool ").append(unsubscribe).append('(').append(observer.name())
                 .append("_context_t *context, const ").append(listener.name()).append("_interface_t *subscriber)\n{\n");
         out.append(indent(project, 1)).append("bool cgen_result = false;\n");
         out.append(indent(project, 1)).append("uint32_t index;\n\n");
@@ -171,15 +179,15 @@ final class ObserverRenderer {
 
     private static void appendPublishFunctions(StringBuilder out, ProjectConfig project, ObserverSpec observer, InterfaceSpec listener) {
         for (InterfaceSpec.Function function : listener.functions()) {
-            out.append(CGenTag.generatedItem("function", "publish_" + function.name())).append('\n');
-            out.append("void ").append(observer.name()).append("_publish_").append(function.name())
-                    .append('(').append(observer.name()).append("_context_t *context");
+            String publish = functionName(project, observer.name(), "publish", function.name());
+            out.append(CGenTag.generatedItem("function", publish)).append('\n');
+            out.append("void ").append(publish).append('(').append(observer.name()).append("_context_t *context");
             appendParameters(out, function.parameters(), true);
             out.append(")\n{\n");
             out.append(indent(project, 1)).append("uint32_t index;\n\n");
             out.append(indent(project, 1)).append("for (index = 0U; index < context->count; index++)\n");
             out.append(indent(project, 1)).append("{\n");
-            out.append(indent(project, 2)).append(listener.name()).append('_').append(function.name())
+            out.append(indent(project, 2)).append(functionName(project, listener.name(), function.name()))
                     .append("(context->subscribers[index]");
             for (InterfaceSpec.Parameter parameter : function.parameters()) {
                 out.append(", ").append(parameter.name());

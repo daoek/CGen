@@ -54,6 +54,35 @@ final class RenderSupport {
         }
     }
 
+    /**
+     * Joins name segments into one generated C function identifier, honoring
+     * {@code format.functionNaming}. Each segment may itself contain underscores (a
+     * user-supplied identifier or a multi-word literal like "go_to_state"); under
+     * camelCase those are treated as word boundaries too, so "motor_driver" + "go_to_state"
+     * becomes "motorDriverGoToState". snake_case reproduces today's plain "_"-join verbatim.
+     */
+    static String functionName(ProjectConfig project, String... segments) {
+        if (!project.camelCaseFunctions()) {
+            return String.join("_", segments);
+        }
+        StringBuilder result = new StringBuilder();
+        boolean first = true;
+        for (String segment : segments) {
+            for (String word : segment.split("_")) {
+                if (word.isEmpty()) {
+                    continue;
+                }
+                if (first) {
+                    result.append(Character.toLowerCase(word.charAt(0))).append(word.substring(1));
+                    first = false;
+                } else {
+                    result.append(Character.toUpperCase(word.charAt(0))).append(word.substring(1));
+                }
+            }
+        }
+        return result.toString();
+    }
+
     static String macro(String file) {
         String value = file.toUpperCase().replaceAll("[^A-Z0-9]", "_");
         return value.endsWith("_") ? value : value + "_";

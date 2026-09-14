@@ -4,6 +4,7 @@ import static com.daoekinc.cgen.generate.RenderSupport.appendIncludes;
 import static com.daoekinc.cgen.generate.RenderSupport.appendParameters;
 import static com.daoekinc.cgen.generate.RenderSupport.appendTypedName;
 import static com.daoekinc.cgen.generate.RenderSupport.appendUnusedSilencer;
+import static com.daoekinc.cgen.generate.RenderSupport.functionName;
 import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 import static com.daoekinc.cgen.generate.RenderSupport.quotedRelative;
@@ -25,8 +26,8 @@ final class AdapterRenderer {
         StringBuilder out = new StringBuilder();
         appendHeaderTop(out, adapter, from, to, docs, user, guard);
         appendHeaderContextStruct(out, project, adapter, to);
-        appendSetTargetDeclaration(out, adapter, to);
-        appendBindFunctionDeclaration(out, adapter, from);
+        appendSetTargetDeclaration(out, project, adapter, to);
+        appendBindFunctionDeclaration(out, project, adapter, from);
         appendHeaderBottom(out, user, guard);
         return out.toString();
     }
@@ -56,15 +57,17 @@ final class AdapterRenderer {
         out.append("} ").append(adapter.name()).append("_context_t;\n\n");
     }
 
-    private static void appendSetTargetDeclaration(StringBuilder out, AdapterSpec adapter, InterfaceSpec to) {
-        out.append(CGenTag.generatedItem("function", "set_target")).append('\n');
-        out.append("void ").append(adapter.name()).append("_set_target(").append(adapter.name())
+    private static void appendSetTargetDeclaration(StringBuilder out, ProjectConfig project, AdapterSpec adapter, InterfaceSpec to) {
+        String setTarget = functionName(project, adapter.name(), "set_target");
+        out.append(CGenTag.generatedItem("function", setTarget)).append('\n');
+        out.append("void ").append(setTarget).append('(').append(adapter.name())
                 .append("_context_t *context, const ").append(to.name()).append("_interface_t *target);\n\n");
     }
 
-    private static void appendBindFunctionDeclaration(StringBuilder out, AdapterSpec adapter, InterfaceSpec from) {
-        out.append(CGenTag.generatedItem("bind-function", adapter.name() + "_bind_" + from.name())).append('\n');
-        out.append("void ").append(adapter.name()).append("_bind_").append(from.name()).append('(')
+    private static void appendBindFunctionDeclaration(StringBuilder out, ProjectConfig project, AdapterSpec adapter, InterfaceSpec from) {
+        String bind = functionName(project, adapter.name(), "bind", from.name());
+        out.append(CGenTag.generatedItem("bind-function", bind)).append('\n');
+        out.append("void ").append(bind).append('(')
                 .append(from.name()).append("_interface_t *interface, ").append(adapter.name()).append("_context_t *context);\n\n");
     }
 
@@ -95,8 +98,9 @@ final class AdapterRenderer {
     }
 
     private static void appendSetTargetDefinition(StringBuilder out, ProjectConfig project, AdapterSpec adapter, InterfaceSpec to) {
-        out.append(CGenTag.generatedItem("function", "set_target")).append('\n');
-        out.append("void ").append(adapter.name()).append("_set_target(").append(adapter.name())
+        String setTarget = functionName(project, adapter.name(), "set_target");
+        out.append(CGenTag.generatedItem("function", setTarget)).append('\n');
+        out.append("void ").append(setTarget).append('(').append(adapter.name())
                 .append("_context_t *context, const ").append(to.name()).append("_interface_t *target)\n{\n")
                 .append(indent(project, 1)).append("context->target = target;\n")
                 .append("}\n\n");
@@ -105,7 +109,7 @@ final class AdapterRenderer {
     private static void appendFunctionImplementation(StringBuilder out, ProjectConfig project, AdapterSpec adapter,
                                                       InterfaceSpec from, InterfaceSpec to, InterfaceSpec.Function function,
                                                       Map<String, String> mappings, UserRegions user) {
-        String implementation = adapter.name() + "_" + from.name() + "_" + function.name();
+        String implementation = functionName(project, adapter.name(), from.name(), function.name());
         out.append(CGenTag.generatedItem("private-function", implementation)).append('\n');
         out.append("static ").append(function.returnType()).append(' ').append(implementation).append("(void *context");
         appendParameters(out, function.parameters(), true);
@@ -131,7 +135,7 @@ final class AdapterRenderer {
             if (returnsValue) {
                 out.append("cgen_result = ");
             }
-            out.append(to.name()).append('_').append(mappedTo).append("(adapter->target");
+            out.append(functionName(project, to.name(), mappedTo)).append("(adapter->target");
             for (InterfaceSpec.Parameter parameter : function.parameters()) {
                 out.append(", ").append(parameter.name());
             }
@@ -144,7 +148,7 @@ final class AdapterRenderer {
     }
 
     private static void appendBindFunctionDefinition(StringBuilder out, ProjectConfig project, AdapterSpec adapter, InterfaceSpec from) {
-        String bind = adapter.name() + "_bind_" + from.name();
+        String bind = functionName(project, adapter.name(), "bind", from.name());
         out.append(CGenTag.generatedItem("bind-function", bind)).append('\n');
         out.append("void ").append(bind).append('(').append(from.name()).append("_interface_t *interface, ")
                 .append(adapter.name()).append("_context_t *context)\n{\n")
@@ -153,7 +157,7 @@ final class AdapterRenderer {
                 .append(indent(project, 2)).append("interface->context = context;\n");
         for (InterfaceSpec.Function function : from.functions()) {
             out.append(indent(project, 2)).append("interface->").append(function.name()).append(" = ")
-                    .append(adapter.name()).append('_').append(from.name()).append('_').append(function.name()).append(";\n");
+                    .append(functionName(project, adapter.name(), from.name(), function.name())).append(";\n");
         }
         out.append(indent(project, 1)).append("}\n}\n\n");
     }

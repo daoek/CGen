@@ -14,8 +14,13 @@ import com.daoekinc.cgen.project.ProjectService;
 import com.daoekinc.cgen.tag.TagHelper;
 import com.daoekinc.cgen.tag.TagHelper.UserRegions;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -23,8 +28,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class CGenerator {
+    private static final Pattern C_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
     private final YamlFiles yamlFiles;
     private final TagHelper tags;
     private final ProjectService projects;
@@ -235,6 +243,129 @@ public final class CGenerator {
         return new DetachResult(List.copyOf(cleaned), List.copyOf(deleted));
     }
 
+    /**
+     * Renames a module: updates its {@code name}/{@code header}/{@code source} in the YAML
+     * spec, moves the spec and any already-generated header/source files to their new names
+     * (so the moved files still carry the old CGen markers), then regenerates. Because
+     * regeneration extracts user regions from whatever already sits at the destination path,
+     * the move-then-regenerate order is what carries user code forward instead of starting
+     * the renamed files empty.
+     */
+    public RenameResult renameModule(ProjectConfig project, String oldIdentifier, String newName) {
+        if (!C_IDENTIFIER.matcher(newName).matches()) {
+            throw new CGenException("New module name must be a valid C identifier, got '" + newName + "'");
+        }
+        Path specPath = resolveModuleSpecPath(project, oldIdentifier);
+        ModuleSpec module = ModuleSpec.from(specPath, yamlFiles.load(specPath));
+        String oldName = module.name();
+        if (oldName.equals(newName)) {
+            throw new CGenException("Module '" + oldName + "' is already named '" + newName + "'");
+        }
+        Path directory = specPath.getParent();
+
+        String newHeader = module.header().equals(oldName + ".h") ? newName + ".h" : module.header();
+        String newSource = module.sourceFile().equals(oldName + ".c") ? newName + ".c" : module.sourceFile();
+        String newSpecFileName = specPath.getFileName().toString().equals(oldName + ".module.yaml")
+                ? newName + ".module.yaml" : specPath.getFileName().toString();
+
+        Path oldHeaderPath = directory.resolve(module.header());
+        Path newHeaderPath = directory.resolve(newHeader);
+        Path oldSourcePath = directory.resolve(module.sourceFile());
+        Path newSourcePath = directory.resolve(newSource);
+        Path newSpecPath = directory.resolve(newSpecFileName);
+
+        requireRenameTarget(newSpecPath, specPath);
+        requireRenameTarget(newHeaderPath, oldHeaderPath);
+        requireRenameTarget(newSourcePath, oldSourcePath);
+
+        String content = readText(specPath);
+        content = replaceScalarField(content, "name", oldName, newName);
+        if (!newHeader.equals(module.header())) {
+            content = replaceScalarField(content, "header", module.header(), newHeader);
+        }
+        if (!newSource.equals(module.sourceFile())) {
+            content = replaceScalarField(content, "source", module.sourceFile(), newSource);
+        }
+
+        List<Move> moved = new ArrayList<>();
+        moveIfExists(specPath, newSpecPath, moved);
+        moveIfExists(oldHeaderPath, newHeaderPath, moved);
+        moveIfExists(oldSourcePath, newSourcePath, moved);
+        writeText(newSpecPath, content);
+
+        return new RenameResult(newSpecPath, oldName, newName, List.copyOf(moved));
+    }
+
+    private Path resolveModuleSpecPath(ProjectConfig project, String moduleName) {
+        List<Path> matches = new ArrayList<>();
+        for (Path path : specificationFiles(project.root(), ".module.yaml", project)) {
+            ModuleSpec candidate = ModuleSpec.from(path, yamlFiles.load(path));
+            if (candidate.name().equals(moduleName)) {
+                matches.add(path);
+            }
+        }
+        if (matches.isEmpty()) {
+            throw new CGenException("No module named '" + moduleName + "' found in this project");
+        }
+        if (matches.size() > 1) {
+            throw new CGenException("Multiple modules named '" + moduleName + "': " + matches);
+        }
+        return matches.get(0);
+    }
+
+    private static void requireRenameTarget(Path target, Path current) {
+        if (!target.equals(current) && Files.exists(target)) {
+            throw new CGenException("Cannot rename: " + target + " already exists");
+        }
+    }
+
+    private static void moveIfExists(Path from, Path to, List<Move> moved) {
+        if (from.equals(to) || !Files.exists(from)) {
+            return;
+        }
+        try {
+            Files.move(from, to, StandardCopyOption.REPLACE_EXISTING);
+            moved.add(new Move(from, to));
+        } catch (IOException exception) {
+            throw new CGenException("Cannot rename " + from + " to " + to + ": " + exception.getMessage(), exception);
+        }
+    }
+
+    private static String readText(Path path) {
+        try {
+            return Files.readString(path);
+        } catch (IOException exception) {
+            throw new CGenException("Cannot read " + path + ": " + exception.getMessage(), exception);
+        }
+    }
+
+    private static void writeText(Path path, String content) {
+        try {
+            Files.writeString(path, content, StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new CGenException("Cannot write " + path + ": " + exception.getMessage(), exception);
+        }
+    }
+
+    // Matches an unindented "key: value" line, tolerating a surrounding quote and a trailing
+    // comment, so the rename touches only the top-level scalar and not a same-named nested key.
+    private static String replaceScalarField(String content, String key, String oldValue, String newValue) {
+        Pattern pattern = Pattern.compile("(?m)^(" + Pattern.quote(key) + ":\\s*)(['\"]?)"
+                + Pattern.quote(oldValue) + "\\2(\\s*(?:#.*)?)$");
+        Matcher matcher = pattern.matcher(content);
+        if (!matcher.find()) {
+            throw new CGenException("Cannot update '" + key + "' in the module spec; expected '" + oldValue
+                    + "' on its own '" + key + ":' line");
+        }
+        return matcher.replaceFirst("$1$2" + Matcher.quoteReplacement(newValue) + "$3");
+    }
+
+    public record Move(Path from, Path to) {
+    }
+
+    public record RenameResult(Path specPath, String oldName, String newName, List<Move> movedFiles) {
+    }
+
     private static InterfaceSpec resolveInterface(Map<String, InterfaceSpec> interfaces, String name, Path path, String label) {
         InterfaceSpec contract = interfaces.get(name);
         if (contract == null) {
@@ -293,15 +424,35 @@ public final class CGenerator {
 
     private List<Path> specificationFiles(Path directory, String suffix, ProjectConfig project) {
         projects.existingDirectory(project, directory);
-        try (var paths = Files.walk(directory)) {
-            return paths.filter(Files::isRegularFile)
-                    .filter(path -> !isExcludedProjectPath(project.root(), path))
-                    .filter(path -> path.getFileName().toString().endsWith(suffix))
-                    .sorted(Comparator.comparing(Path::toString))
-                    .toList();
+        List<Path> found = new ArrayList<>();
+        try {
+            Files.walkFileTree(directory, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    if (isExcludedProjectPath(project.root(), dir)) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    // A nested cgen.yaml marks the start of a separate, self-contained project
+                    // (e.g. an imported library) - its files are that project's to generate,
+                    // with its own rules, not this scan's.
+                    if (!dir.equals(directory) && Files.isRegularFile(dir.resolve(ProjectService.PROJECT_FILE))) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+
+                @Override
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                    if (attrs.isRegularFile() && file.getFileName().toString().endsWith(suffix)) {
+                        found.add(file);
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
         } catch (IOException exception) {
             throw new CGenException("Cannot scan " + directory + ": " + exception.getMessage(), exception);
         }
+        return found.stream().sorted(Comparator.comparing(Path::toString)).toList();
     }
 
     private static boolean isExcludedProjectPath(Path root, Path path) {
