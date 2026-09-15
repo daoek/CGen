@@ -95,13 +95,13 @@ class YamlErgonomicsTest {
 
         String header = Files.readString(temporaryDirectory.resolve("logger.h"));
         String source = Files.readString(temporaryDirectory.resolve("logger.c"));
-        assertTrue(header.contains("uint32_t logger_get_log_count(void);"));
-        assertTrue(header.contains("void logger_set_log_count(uint32_t value);"));
+        assertTrue(header.contains("uint32_t get_log_count(void);"));
+        assertTrue(header.contains("void set_log_count(uint32_t value);"));
         assertTrue(!header.contains("extern"));
         assertTrue(source.contains("static uint32_t log_count;"));
-        assertTrue(source.contains("uint32_t logger_get_log_count(void)"));
+        assertTrue(source.contains("uint32_t get_log_count(void)"));
         assertTrue(source.contains("return log_count;"));
-        assertTrue(source.contains("void logger_set_log_count(uint32_t value)"));
+        assertTrue(source.contains("void set_log_count(uint32_t value)"));
         assertTrue(source.contains("log_count = value;"));
         assertTrue(source.contains("/*@CGen usercode+ variable.log_count.set*/"));
 
@@ -114,6 +114,53 @@ class YamlErgonomicsTest {
 
         assertEquals(0, cli.run("gen"));
         assertTrue(Files.readString(sourcePath).contains(customSet));
+    }
+
+    @Test
+    void variableVisibilityGetOrSetGeneratesOnlyThatAccessor() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Path project = temporaryDirectory.resolve("cgen.yaml");
+        Files.writeString(project, Files.readString(project).replace(
+                "format:\n  indent: 4\n  lineEnding: lf",
+                "format:\n  indent: 4\n  lineEnding: lf\n  publicVariables: accessors"));
+
+        Files.writeString(temporaryDirectory.resolve("logger.module.yaml"), """
+                kind: module
+                name: logger
+                implements: []
+                includes: []
+                context: []
+                variables:
+                  - uint32_t log_count get
+                  - bool overflowed set
+                """);
+
+        assertEquals(0, cli.run("generate"));
+
+        String header = Files.readString(temporaryDirectory.resolve("logger.h"));
+        assertTrue(header.contains("uint32_t get_log_count(void);"));
+        assertTrue(!header.contains("set_log_count"));
+        assertTrue(header.contains("void set_overflowed(bool value);"));
+        assertTrue(!header.contains("get_overflowed"));
+    }
+
+    @Test
+    void variableVisibilityGetOrSetWithoutAccessorsIsRejected() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+
+        Files.writeString(temporaryDirectory.resolve("logger.module.yaml"), """
+                kind: module
+                name: logger
+                implements: []
+                includes: []
+                context: []
+                variables:
+                  - uint32_t log_count get
+                """);
+
+        assertEquals(1, cli.run("generate"));
     }
 
     @Test

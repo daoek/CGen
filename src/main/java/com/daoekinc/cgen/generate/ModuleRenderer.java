@@ -10,6 +10,7 @@ import static com.daoekinc.cgen.generate.RenderSupport.indent;
 import static com.daoekinc.cgen.generate.RenderSupport.macro;
 import static com.daoekinc.cgen.generate.RenderSupport.quotedRelative;
 
+import com.daoekinc.cgen.CGenException;
 import com.daoekinc.cgen.model.InterfaceSpec;
 import com.daoekinc.cgen.model.ModuleSpec;
 import com.daoekinc.cgen.model.ProjectConfig;
@@ -21,6 +22,7 @@ final class ModuleRenderer {
     String renderHeader(ProjectConfig project, ModuleSpec module, List<InterfaceSpec> interfaces,
                         DocumentationRenderer docs, UserRegions user) {
         boolean accessors = project.publicVariableStyle().equals("accessors");
+        requireAccessorsForPartialVisibility(module, accessors);
         String guard = macro(module.header());
 
         StringBuilder out = new StringBuilder();
@@ -50,16 +52,21 @@ final class ModuleRenderer {
     private static void appendPublicVariableDeclarations(StringBuilder out, ProjectConfig project, ModuleSpec module,
                                                           DocumentationRenderer docs, boolean accessors) {
         for (ModuleSpec.Variable variable : module.variables()) {
-            if (variable.visibility() != ModuleSpec.Visibility.PUBLIC) {
+            if (variable.visibility() == ModuleSpec.Visibility.PRIVATE) {
                 continue;
             }
             if (accessors) {
                 out.append(CGenTag.generatedItem("public-accessor", variable.name())).append('\n');
                 out.append(docs.variable(variable.name(), variable.description()));
-                appendAccessorSignature(out, project, module, variable, true);
-                out.append(";\n");
-                appendAccessorSignature(out, project, module, variable, false);
-                out.append(";\n\n");
+                if (emitsGetter(variable.visibility())) {
+                    appendAccessorSignature(out, project, variable, true);
+                    out.append(";\n");
+                }
+                if (emitsSetter(variable.visibility())) {
+                    appendAccessorSignature(out, project, variable, false);
+                    out.append(";\n");
+                }
+                out.append('\n');
             } else {
                 out.append(CGenTag.generatedItem("public-variable", variable.name())).append('\n');
                 out.append(docs.variable(variable.name(), variable.description()));
@@ -68,6 +75,27 @@ final class ModuleRenderer {
                 out.append(";\n\n");
             }
         }
+    }
+
+    private static void requireAccessorsForPartialVisibility(ModuleSpec module, boolean accessors) {
+        if (accessors) {
+            return;
+        }
+        for (ModuleSpec.Variable variable : module.variables()) {
+            if (variable.visibility() == ModuleSpec.Visibility.GET || variable.visibility() == ModuleSpec.Visibility.SET) {
+                throw new CGenException(module.source() + ": variable '" + variable.name()
+                        + "' visibility " + variable.visibility().name().toLowerCase()
+                        + " requires format.publicVariables: accessors");
+            }
+        }
+    }
+
+    private static boolean emitsGetter(ModuleSpec.Visibility visibility) {
+        return visibility == ModuleSpec.Visibility.PUBLIC || visibility == ModuleSpec.Visibility.GET;
+    }
+
+    private static boolean emitsSetter(ModuleSpec.Visibility visibility) {
+        return visibility == ModuleSpec.Visibility.PUBLIC || visibility == ModuleSpec.Visibility.SET;
     }
 
     private static void appendContextStruct(StringBuilder out, ProjectConfig project, ModuleSpec module,
@@ -152,6 +180,7 @@ final class ModuleRenderer {
     String renderSource(ProjectConfig project, ModuleSpec module, List<InterfaceSpec> interfaces,
                         DocumentationRenderer docs, UserRegions user) {
         boolean accessors = project.publicVariableStyle().equals("accessors");
+        requireAccessorsForPartialVisibility(module, accessors);
 
         StringBuilder out = new StringBuilder();
         appendSourceTop(out, module, docs, user);
@@ -204,8 +233,7 @@ final class ModuleRenderer {
     private static void appendVariableDefinitions(StringBuilder out, ProjectConfig project, ModuleSpec module,
                                                    DocumentationRenderer docs, boolean accessors) {
         for (ModuleSpec.Variable variable : module.variables()) {
-            boolean privateStorage = variable.visibility() == ModuleSpec.Visibility.PRIVATE
-                    || (variable.visibility() == ModuleSpec.Visibility.PUBLIC && accessors);
+            boolean privateStorage = variable.visibility() == ModuleSpec.Visibility.PRIVATE || accessors;
             out.append(CGenTag.generatedItem(privateStorage ? "private-variable" : "variable-definition", variable.name())).append('\n');
             out.append(docs.variable(variable.name(), variable.description()));
             if (privateStorage) {
@@ -225,20 +253,24 @@ final class ModuleRenderer {
             return;
         }
         for (ModuleSpec.Variable variable : module.variables()) {
-            if (variable.visibility() != ModuleSpec.Visibility.PUBLIC) {
+            if (variable.visibility() == ModuleSpec.Visibility.PRIVATE) {
                 continue;
             }
             out.append(CGenTag.generatedItem("public-accessor", variable.name())).append('\n');
-            appendAccessorSignature(out, project, module, variable, true);
-            out.append("\n{\n");
-            out.append(user.render("variable." + variable.name() + ".get", indent(project, 1) + "return " + variable.name() + ";",
-                    indent(project, 1)));
-            out.append("}\n\n");
-            appendAccessorSignature(out, project, module, variable, false);
-            out.append("\n{\n");
-            out.append(user.render("variable." + variable.name() + ".set", indent(project, 1) + variable.name() + " = value;",
-                    indent(project, 1)));
-            out.append("}\n\n");
+            if (emitsGetter(variable.visibility())) {
+                appendAccessorSignature(out, project, variable, true);
+                out.append("\n{\n");
+                out.append(user.render("variable." + variable.name() + ".get", indent(project, 1) + "return " + variable.name() + ";",
+                        indent(project, 1)));
+                out.append("}\n\n");
+            }
+            if (emitsSetter(variable.visibility())) {
+                appendAccessorSignature(out, project, variable, false);
+                out.append("\n{\n");
+                out.append(user.render("variable." + variable.name() + ".set", indent(project, 1) + variable.name() + " = value;",
+                        indent(project, 1)));
+                out.append("}\n\n");
+            }
         }
     }
 
@@ -361,16 +393,16 @@ final class ModuleRenderer {
         out.append(user.renderOrphans());
     }
 
-    private static void appendAccessorSignature(StringBuilder out, ProjectConfig project, ModuleSpec module,
+    private static void appendAccessorSignature(StringBuilder out, ProjectConfig project,
                                                 ModuleSpec.Variable variable, boolean isGetter) {
         if (isGetter) {
             out.append(variable.type());
             if (!variable.type().stripTrailing().endsWith("*")) {
                 out.append(' ');
             }
-            out.append(functionName(project, module.name(), "get", variable.name())).append("(void)");
+            out.append(functionName(project, "get", variable.name())).append("(void)");
         } else {
-            out.append("void ").append(functionName(project, module.name(), "set", variable.name())).append('(');
+            out.append("void ").append(functionName(project, "set", variable.name())).append('(');
             appendTypedName(out, variable.type(), "value");
             out.append(')');
         }

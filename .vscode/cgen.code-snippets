@@ -1,0 +1,138 @@
+{
+    "CGen: enum": {
+        "scope": "yaml",
+        "prefix": "cgen-enum",
+        "description": "CGen enum entry (interface or module)",
+        "body": [
+            "- name: ${1:mode_t}",
+            "  description: ${2:Operating mode}",
+            "  values:",
+            "    - { name: ${3:MODE_OFF}, value: ${4:0} }",
+            "    - { name: ${5:MODE_ON} }$0"
+        ]
+    },
+    "CGen: enum value": {
+        "scope": "yaml",
+        "prefix": "cgen-enum-value",
+        "description": "CGen enum value line",
+        "body": "- { name: ${1:NAME}, value: ${2:0} }$0"
+    },
+    "CGen: struct": {
+        "scope": "yaml",
+        "prefix": "cgen-struct",
+        "description": "CGen struct entry (interface)",
+        "body": [
+            "- name: ${1:config_t}",
+            "  description: ${2:Configuration}",
+            "  fields:",
+            "    - ${3:uint32_t} ${4:value}$0"
+        ]
+    },
+    "CGen: field (compact)": {
+        "scope": "yaml",
+        "prefix": "cgen-field",
+        "description": "CGen compact \"type name\" field/context/parameter line",
+        "body": "- ${1:uint32_t} ${2:name}$0"
+    },
+    "CGen: field (map form)": {
+        "scope": "yaml",
+        "prefix": "cgen-field-full",
+        "description": "CGen field with a description",
+        "body": "- { type: ${1:uint32_t}, name: ${2:name}, description: ${3:What it holds} }$0"
+    },
+    "CGen: interface function": {
+        "scope": "yaml",
+        "prefix": "cgen-function-interface",
+        "description": "CGen interface function entry",
+        "body": [
+            "- name: ${1:write}",
+            "  return: ${2:common_iic_status_t}",
+            "  description: ${3:Write bytes}",
+            "  parameters:",
+            "    - ${4:const uint8_t *}${5:data}$0"
+        ]
+    },
+    "CGen: module function": {
+        "scope": "yaml",
+        "prefix": "cgen-function-module",
+        "description": "CGen module standalone function entry",
+        "body": [
+            "- name: ${1:initialize}",
+            "  return: ${2:bool}",
+            "  description: ${3:One-time initialization}",
+            "  parameters: []",
+            "  invalidReturn: ${4:false}",
+            "  visibility: ${5|private,public|}$0"
+        ]
+    },
+    "CGen: parameter": {
+        "scope": "yaml",
+        "prefix": "cgen-parameter",
+        "description": "CGen compact function parameter line",
+        "body": "- ${1:uint32_t} ${2:value}$0"
+    },
+    "CGen: module variable (compact)": {
+        "scope": "yaml",
+        "prefix": "cgen-variable",
+        "description": "CGen module variable, compact form (leave 3rd field blank for private)",
+        "body": "- ${1:uint32_t} ${2:name}${3| public, get, set|}$0"
+    },
+    "CGen: module variable (full)": {
+        "scope": "yaml",
+        "prefix": "cgen-variable-full",
+        "description": "CGen module variable with visibility/initial/description",
+        "body": "- { type: ${1:bool}, name: ${2:busy}, visibility: ${3|private,public,get,set|}, initial: '${4:false}', description: ${5:What it tracks} }$0"
+    },
+    "CGen: state": {
+        "scope": "yaml",
+        "prefix": "cgen-state",
+        "description": "CGen state-machine state entry",
+        "body": "- { name: ${1:RUNNING}, description: ${2:In progress} }$0"
+    },
+    "CGen: event": {
+        "scope": "yaml",
+        "prefix": "cgen-event",
+        "description": "CGen state-machine event entry",
+        "body": [
+            "- name: ${1:START}",
+            "  description: ${2:Begin running}",
+            "  parameters: []$0"
+        ]
+    },
+    "CGen: transition": {
+        "scope": "yaml",
+        "prefix": "cgen-transition",
+        "description": "CGen state-machine transition entry",
+        "body": "- { from: ${1:IDLE}, event: ${2:START}, to: ${3:RUNNING}, guard: ${4:false}, description: ${5:Start the run} }$0"
+    },
+    "CGen: command": {
+        "scope": "yaml",
+        "prefix": "cgen-command",
+        "description": "CGen command-table command entry",
+        "body": "- { name: ${1:PING}, opcode: ${2:0}, description: ${3:Respond with a heartbeat} }$0"
+    },
+    "CGen: status code": {
+        "scope": "yaml",
+        "prefix": "cgen-code",
+        "description": "CGen status-codes code entry",
+        "body": "- { name: ${1:NOT_READY}, value: ${2:-1}, description: ${3:Not ready} }$0"
+    },
+    "CGen: adapter mapping": {
+        "scope": "yaml",
+        "prefix": "cgen-mapping",
+        "description": "CGen adapter function mapping entry",
+        "body": "- { from: ${1:write}, to: ${2:send} }$0"
+    },
+    "CGen: system include": {
+        "scope": "yaml",
+        "prefix": "cgen-include-system",
+        "description": "CGen <system.h> include entry",
+        "body": "<${1:stdint.h}>$0"
+    },
+    "CGen: local include": {
+        "scope": "yaml",
+        "prefix": "cgen-include-local",
+        "description": "CGen \"local.h\" include entry (single-quoted in YAML so the double quotes survive)",
+        "body": "'\"${1:vendor.h}\"'$0"
+    }
+}

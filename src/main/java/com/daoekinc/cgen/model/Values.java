@@ -215,15 +215,17 @@ final class Values {
         return result;
     }
 
+    private static final Set<String> COMPACT_VARIABLE_VISIBILITIES = Set.of("public", "get", "set");
+
     static Map<String, Object> compactVariable(String text, String context) {
         List<String> tokens = new ArrayList<>(List.of(text.strip().split("\\s+")));
-        boolean isPublic = !tokens.isEmpty() && tokens.get(tokens.size() - 1).equals("public");
-        if (isPublic) {
-            tokens.remove(tokens.size() - 1);
+        String visibility = null;
+        if (!tokens.isEmpty() && COMPACT_VARIABLE_VISIBILITIES.contains(tokens.get(tokens.size() - 1))) {
+            visibility = tokens.remove(tokens.size() - 1);
         }
         Map<String, Object> field = compactField(String.join(" ", tokens), context);
-        if (isPublic) {
-            field.put("visibility", "public");
+        if (visibility != null) {
+            field.put("visibility", visibility);
         }
         return field;
     }

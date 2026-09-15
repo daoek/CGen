@@ -136,6 +136,16 @@ same reason - you'd be writing into someone else's project with the wrong
 `cgen.yaml` rules. To work on the nested project, run `CGen` from inside it;
 it resolves its own `cgen.yaml` and generates with its own settings.
 
+### Editor snippets
+
+`.vscode/cgen.code-snippets` has VS Code snippets for the repeated list items
+below (enum/struct entries, fields, parameters, functions, module variables,
+state-machine states/events/transitions, command-table commands, status
+codes, adapter mappings, `includes` entries) - open any `.yaml` file, type a
+prefix like `cgen-function-module` or `cgen-variable`, and expand it instead
+of retyping the shape from the docs each time. They work anywhere VS Code
+sees the file as YAML, so they apply to every kind of spec file in this repo.
+
 ## Project configuration
 
 ```yaml
@@ -156,13 +166,15 @@ format:
 Project configuration contains generator-wide preferences only; it does not
 emit additional C headers or sources.
 
-`format.publicVariables` picks how a module's `public` variables are exposed
-project-wide. `extern` (default) gives each one a plain `extern` declaration
-in the header and a matching definition in the source. `accessors` keeps the
-variable `static` (private storage) and instead generates `<module>_get_<name>`
-/ `<module>_set_<name>` functions, each with its own `variable.<name>.get` /
-`variable.<name>.set` user region so you can add validation or side effects
-on read/write. See [Module YAML](#module-yaml) below.
+`format.publicVariables` picks how a module's non-`private` variables are
+exposed project-wide. `extern` (default) gives each `public` one a plain
+`extern` declaration in the header and a matching definition in the source.
+`accessors` keeps the variable `static` (private storage) and instead
+generates `get_<name>` / `set_<name>` functions (no module prefix), each with
+its own `variable.<name>.get` / `variable.<name>.set` user region so you can
+add validation or side effects on read/write. `get`/`set` visibility on a
+variable narrows this to only that one accessor; both require
+`format.publicVariables: accessors`. See [Module YAML](#module-yaml) below.
 
 For custom documentation, set `documentation.style` to `custom` and point
 `documentation.file` at a YAML file with optional `file`, `function`, `type`,
@@ -246,23 +258,29 @@ the context struct and variables, so `context`/`variables` entries can use
 them as a field type - same shape as [interface enums](#interface-yaml).
 
 Variables default to `private` (`static` storage) — write just `type name`.
-Append a trailing `public` to expose one, or use the map form
+Append a trailing `public`, `get`, or `set` to expose one, or use the map form
 (`{ type: ..., name: ..., visibility: public, initial: ... }`) when you need
-`initial`/`description` alongside it. How a `public` variable is exposed is
-controlled project-wide by `format.publicVariables` (see
-[Project configuration](#project-configuration)): `extern` gives it a plain
-`extern` declaration in the header and a definition in the source; `accessors`
-keeps it `static` and generates a getter/setter pair instead, each with its
-own user region:
+`initial`/`description` alongside it. How a non-`private` variable is exposed
+is controlled project-wide by `format.publicVariables` (see
+[Project configuration](#project-configuration)): `extern` gives a `public`
+variable a plain `extern` declaration in the header and a definition in the
+source; `accessors` keeps it `static` and generates a getter/setter pair
+instead, each with its own user region:
 
 ```c
-uint32_t ra_iic_get_transfer_count(void)
+uint32_t get_transfer_count(void)
 {
 /*@CGen usercode+ variable.transfer_count.get*/
     return transfer_count;
 /*@CGen usercode-*/
 }
 ```
+
+`get` and `set` visibility generate only that one accessor (the variable stays
+`static`, with no counterpart function) — useful for a read-only counter or a
+write-only latch. `get`/`set` require `format.publicVariables: accessors`;
+using them under `extern` is a config error, since `extern` only knows
+`public`/`private`.
 
 A module can also declare its own standalone functions, independent of any
 implemented interface:

@@ -30,7 +30,9 @@ public record ModuleSpec(
 
     public enum Visibility {
         PUBLIC,
-        PRIVATE
+        PRIVATE,
+        GET,
+        SET
     }
 
     public static ModuleSpec from(Path source, Map<String, Object> yaml) {
@@ -61,7 +63,7 @@ public record ModuleSpec(
             try {
                 visibility = Visibility.valueOf(visibilityText);
             } catch (IllegalArgumentException exception) {
-                throw new CGenException(itemContext + ".visibility must be public or private");
+                throw new CGenException(itemContext + ".visibility must be public, private, get, or set");
             }
             String initial = Values.optionalString(item, "initial", null, itemContext);
             if (initial != null && (initial.contains("\n") || initial.contains("\r") || initial.contains(";"))) {
@@ -87,6 +89,9 @@ public record ModuleSpec(
             try {
                 visibility = Visibility.valueOf(visibilityText);
             } catch (IllegalArgumentException exception) {
+                visibility = null;
+            }
+            if (visibility != Visibility.PUBLIC && visibility != Visibility.PRIVATE) {
                 throw new CGenException(itemContext + ".visibility must be public or private");
             }
             functions.add(new Function(InterfaceSpec.parseFunctionItem(item, itemContext, null, null), visibility));
