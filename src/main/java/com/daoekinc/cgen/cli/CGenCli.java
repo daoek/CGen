@@ -12,6 +12,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -236,16 +237,53 @@ public final class CGenCli {
                 throw new CGenException("Usage: CGen generate [directory] [-f|--force] [-v|--verbose] [--also-nested]");
             }
         }
-        ProjectConfig project = projects.findAndLoad(workingDirectory);
-        Path scope = projects.existingDirectory(project, directory);
-        if (verbose) {
-            out.println("Project root: " + project.root());
-            out.println("Scope: " + scope);
+        ProjectConfig project;
+        try {
+            project = projects.findAndLoad(workingDirectory);
+        } catch (CGenException exception) {
+            if (!alsoNested) {
+                throw exception;
+            }
+            project = null;
         }
-        List<Path> files = new ArrayList<>(
-                generator.generate(project, scope, force, progressListener(project, verbose), switchEnumConfirmation(project)));
+
+        Path scope = null;
+        Path nestedScanRoot;
+        if (project != null) {
+            scope = projects.existingDirectory(project, directory);
+            nestedScanRoot = scope;
+        } else {
+            nestedScanRoot = directory;
+            if (!Files.isDirectory(nestedScanRoot)) {
+                throw new CGenException("Directory does not exist: " + nestedScanRoot);
+            }
+        }
+
+        int knownDirectoryCount = 0;
         if (alsoNested) {
-            for (Path nestedProjectFile : generator.findNestedProjectRoots(scope)) {
+            AlsoNestedDecision decision = confirmAlsoNestedGenerate(nestedScanRoot);
+            if (!decision.confirmed()) {
+                out.println();
+                out.println("Cancelled. No files were generated.");
+                return 1;
+            }
+            knownDirectoryCount = decision.directoryCount();
+        }
+
+        List<Path> files = new ArrayList<>();
+        if (project != null) {
+            if (verbose) {
+                out.println("Project root: " + project.root());
+                out.println("Scope: " + scope);
+            }
+            files.addAll(generator.generate(project, scope, force, progressListener(project, verbose), switchEnumConfirmation(project)));
+        } else if (verbose) {
+            out.println("No cgen.yaml found at or above " + workingDirectory
+                    + " - scanning " + nestedScanRoot + " for nested projects only (--also-nested)");
+        }
+
+        if (alsoNested) {
+            for (Path nestedProjectFile : scanForNestedProjects(nestedScanRoot, knownDirectoryCount)) {
                 ProjectConfig nestedProject = projects.load(nestedProjectFile);
                 if (verbose) {
                     out.println("Nested project: " + nestedProject.root());
@@ -256,9 +294,64 @@ public final class CGenCli {
         }
         if (!files.isEmpty()) {
             out.println();
+            if (alsoNested) {
+                out.println("Generated files:");
+                for (Path file : files) {
+                    out.println("  " + displayPath(file));
+                }
+                out.println();
+            }
         }
         out.println(files.size() + " file(s) generated");
         return 0;
+    }
+
+    private record AlsoNestedDecision(boolean confirmed, int directoryCount) {
+    }
+
+    private AlsoNestedDecision confirmAlsoNestedGenerate(Path scanRoot) {
+        out.println();
+        out.println(YELLOW_BOLD + "--also-nested walks every subdirectory under " + scanRoot
+                + " looking for nested cgen.yaml projects." + RESET);
+        out.println("On a large or deep directory (an entire drive, say) that can take a while.");
+        int[] counted = {0};
+        long start = System.nanoTime();
+        generator.countDirectoriesFast(scanRoot, count -> {
+            counted[0] = count;
+            if (count == 1 || count % 200 == 0) {
+                out.print("\rCounting... " + count + " director" + (count == 1 ? "y" : "ies") + " found so far");
+                out.flush();
+            }
+        });
+        out.print("\rFound " + counted[0] + " director" + (counted[0] == 1 ? "y" : "ies") + " under " + scanRoot
+                + " (" + Math.max(1, (System.nanoTime() - start) / 1_000_000) + " ms).                              \n");
+        out.print("Search all of them for nested cgen.yaml projects and generate what's found? [y/N]: ");
+        out.flush();
+        String answer;
+        try {
+            answer = input.readLine();
+        } catch (IOException exception) {
+            throw new CGenException("Cannot read confirmation: " + exception.getMessage(), exception);
+        }
+        boolean confirmed = answer != null && (answer.equalsIgnoreCase("y") || answer.equalsIgnoreCase("yes"));
+        return new AlsoNestedDecision(confirmed, counted[0]);
+    }
+
+    private List<Path> scanForNestedProjects(Path scanRoot, int knownDirectoryCount) {
+        int total = Math.max(knownDirectoryCount, 1);
+        List<Path> found = generator.findNestedProjectRoots(scanRoot,
+                (count, directory) -> printProgress(Math.min(count, total), total));
+        out.println();
+        out.println("Found " + found.size() + " nested project" + (found.size() == 1 ? "" : "s") + ".");
+        return found;
+    }
+
+    private Path displayPath(Path file) {
+        try {
+            return workingDirectory.relativize(file);
+        } catch (IllegalArgumentException exception) {
+            return file;
+        }
     }
 
     private CGenerator.SwitchEnumConfirmation switchEnumConfirmation(ProjectConfig project) {
@@ -298,6 +391,19 @@ public final class CGenCli {
         int filled = (int) Math.round((completed / (double) total) * width);
         String bar = GREEN + "#".repeat(filled) + RESET + "-".repeat(width - filled);
         out.print("\r[" + bar + "] " + completed + "/" + total + "  " + relativePath + "[K");
+        out.flush();
+    }
+
+    /**
+     * Same bar as {@link #printProgress(int, int, Path)} but no trailing label - a per-directory
+     * path there changes length every call, which is what turned into "full output of the directory
+     * scanned" instead of one simple, steady progress bar.
+     */
+    private void printProgress(int completed, int total) {
+        int width = 30;
+        int filled = (int) Math.round((completed / (double) total) * width);
+        String bar = GREEN + "#".repeat(filled) + RESET + "-".repeat(width - filled);
+        out.print("\r[" + bar + "] " + completed + "/" + total + " [K");
         out.flush();
     }
 
@@ -396,7 +502,12 @@ public final class CGenCli {
                 --also-nested
                   generate: also generate every nested project found under the scanned
                   directory (any subdirectory with its own cgen.yaml, normally left alone),
-                  each using its own cgen.yaml settings - not the outer project's.
+                  each using its own cgen.yaml settings - not the outer project's. Works even
+                  when the starting directory has no cgen.yaml of its own; it's then used only
+                  as a search root. First does a fast multithreaded directory count (live
+                  progress, no cgen.yaml checking yet) and asks for confirmation with that
+                  count; only once confirmed does the slower real scan run - checking each
+                  directory for a cgen.yaml, live progress again - before generating anything.
                 """);
     }
 }

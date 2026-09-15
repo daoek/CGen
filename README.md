@@ -637,6 +637,42 @@ settings, not the outer project's:
 CGen generate --also-nested
 ```
 
+Unlike plain `generate`, this works even when the directory you run it from
+has no `cgen.yaml` of its own (or above it) - it's then used purely as a
+search root, with no outer project generated, just every nested one found
+underneath it. Since that walk isn't bounded by any project root and can
+reach arbitrarily far (point it at a drive root and it will walk the whole
+drive), `--also-nested` never scans silently or generates anything before
+asking. It first does a fast, multithreaded, recursive directory count -
+cheap enough to run before you've decided anything, and enough to gauge how
+big the tree actually is - shown live as it goes, then asks for confirmation:
+
+```console
+--also-nested walks every subdirectory under <directory> looking for nested cgen.yaml projects.
+On a large or deep directory (an entire drive, say) that can take a while.
+Found 48213 directories under <directory> (612 ms).
+Search all of them for nested cgen.yaml projects and generate what's found? [y/N]:
+```
+
+Only once you confirm does the real scan run - the one that actually checks
+each directory for a `cgen.yaml` (also multithreaded). Since the fast pass
+already gave an exact directory count, this shows a real `[bar] N/total`
+progress bar instead of an open-ended counter, followed by how many nested
+projects it found and then generating each one. Once every nested project has
+been generated, the run ends with a full list of every file that was
+generated or regenerated across the outer project and all of them, before the
+final count:
+
+```console
+Generated files:
+  outer.h
+  outer.c
+  lib1\lib1_iic_I.h
+  lib2\deep\lib2_iic_I.h
+
+4 file(s) generated
+```
+
 ## MISRA-oriented generated C
 
 CGen emits MISRA C:2012-friendly control flow: generated functions use a

@@ -29,9 +29,16 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Phaser;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.function.IntConsumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
 
 public final class CGenerator {
     private static final Pattern C_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
@@ -653,11 +660,29 @@ public final class CGenerator {
                     }
                     return FileVisitResult.CONTINUE;
                 }
+
+                @Override
+                public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                    return FileVisitResult.CONTINUE;
+                }
             });
         } catch (IOException exception) {
             throw new CGenException("Cannot scan " + directory + ": " + exception.getMessage(), exception);
         }
         return found.stream().sorted(Comparator.comparing(Path::toString)).toList();
+    }
+
+    /** Thread count for {@link #walkDirectoriesParallel} - directory listing is I/O-bound, so this can far exceed core count. */
+    private static final int PARALLEL_WALK_THREADS = 50;
+
+    /**
+     * Fast, multithreaded recursive directory count under {@code scope} (no cgen.yaml checking,
+     * unlike {@link #findNestedProjectRoots}) - cheap enough to run, live, before asking whether to
+     * proceed with the real (also multithreaded, cgen.yaml-checking) scan for {@code --also-nested}.
+     * Reports the running total as it goes; may call it from multiple threads concurrently.
+     */
+    public int countDirectoriesFast(Path scope, IntConsumer onProgress) {
+        return walkDirectoriesParallel(scope, (count, directory) -> onProgress.accept(count));
     }
 
     /**
@@ -666,24 +691,67 @@ public final class CGenerator {
      * descending at a nested project boundary - finding what's past it is the point.
      */
     public List<Path> findNestedProjectRoots(Path scope) {
-        List<Path> found = new ArrayList<>();
-        try {
-            Files.walkFileTree(scope, new SimpleFileVisitor<>() {
-                @Override
-                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                    if (isExcludedProjectPath(scope, dir)) {
-                        return FileVisitResult.SKIP_SUBTREE;
-                    }
-                    if (!dir.equals(scope) && Files.isRegularFile(dir.resolve(ProjectService.PROJECT_FILE))) {
-                        found.add(dir.resolve(ProjectService.PROJECT_FILE));
-                    }
-                    return FileVisitResult.CONTINUE;
-                }
-            });
-        } catch (IOException exception) {
-            throw new CGenException("Cannot scan " + scope + ": " + exception.getMessage(), exception);
-        }
+        return findNestedProjectRoots(scope, (count, directory) -> { });
+    }
+
+    /** Same as {@link #findNestedProjectRoots(Path)}, reporting each directory visited (with a running count) as it walks. */
+    public List<Path> findNestedProjectRoots(Path scope, DirectoryProgress onDirectoryVisited) {
+        ConcurrentLinkedQueue<Path> found = new ConcurrentLinkedQueue<>();
+        walkDirectoriesParallel(scope, (count, directory) -> {
+            onDirectoryVisited.onDirectory(count, directory);
+            if (!directory.equals(scope) && Files.isRegularFile(directory.resolve(ProjectService.PROJECT_FILE))) {
+                found.add(directory.resolve(ProjectService.PROJECT_FILE));
+            }
+        });
         return found.stream().sorted(Comparator.comparing(Path::toString)).toList();
+    }
+
+    @FunctionalInterface
+    public interface DirectoryProgress {
+        void onDirectory(int count, Path directory);
+    }
+
+    /**
+     * Walks every directory under {@code scope} (including {@code scope} itself), {@code onDirectory}
+     * called once per directory found with the running count and that directory's path. Unlike a
+     * single-threaded {@code Files.walkFileTree}, up to {@value #PARALLEL_WALK_THREADS} directories
+     * are listed concurrently - each directory's own subdirectories are handed off as new tasks to
+     * the same pool rather than recursed into inline, so one thread blocked on a slow/large directory
+     * listing doesn't stall the others. An inaccessible directory is skipped (its listing throws)
+     * rather than aborting the walk. Returns the total directory count.
+     */
+    private int walkDirectoriesParallel(Path scope, DirectoryProgress onDirectory) {
+        ExecutorService pool = Executors.newFixedThreadPool(PARALLEL_WALK_THREADS);
+        AtomicInteger total = new AtomicInteger();
+        Phaser phaser = new Phaser(1);
+        try {
+            submitDirectoryWalkTask(pool, phaser, scope, scope, total, onDirectory);
+            phaser.arriveAndAwaitAdvance();
+        } finally {
+            pool.shutdown();
+        }
+        return total.get();
+    }
+
+    private static void submitDirectoryWalkTask(ExecutorService pool, Phaser phaser, Path scope, Path directory,
+                                                AtomicInteger total, DirectoryProgress onDirectory) {
+        phaser.register();
+        pool.execute(() -> {
+            try {
+                if (isExcludedProjectPath(scope, directory)) {
+                    return;
+                }
+                onDirectory.onDirectory(total.incrementAndGet(), directory);
+                try (Stream<Path> entries = Files.list(directory)) {
+                    entries.filter(Files::isDirectory).forEach(subdirectory ->
+                            submitDirectoryWalkTask(pool, phaser, scope, subdirectory, total, onDirectory));
+                } catch (IOException exception) {
+                    // Inaccessible directory (permissions, a broken junction, ...) - skip it, don't abort the walk.
+                }
+            } finally {
+                phaser.arriveAndDeregister();
+            }
+        });
     }
 
     private static boolean isExcludedProjectPath(Path root, Path path) {

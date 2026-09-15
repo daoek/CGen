@@ -65,7 +65,7 @@ class NestedProjectTest {
 
     @Test
     void alsoNestedGeneratesNestedProjectsUsingTheirOwnSettings() throws Exception {
-        CliFixture outer = new CliFixture(temporaryDirectory);
+        CliFixture outer = new CliFixture(temporaryDirectory, "y\n");
         assertEquals(0, outer.run("init"));
         Files.writeString(temporaryDirectory.resolve("outer.module.yaml"), """
                 kind: module
@@ -112,5 +112,43 @@ class NestedProjectTest {
         String libHeader = Files.readString(libDirectory.resolve("libmod.h"));
         assertTrue(outerHeader.contains("void go_to_state(void);"), "outer project uses its own snake_case default");
         assertTrue(libHeader.contains("void goToState(void);"), "nested project uses its own camelCase setting");
+
+        String output = outer.output();
+        assertTrue(output.contains("Counting... "), "fast pre-count must show live progress, not silence");
+        assertTrue(output.contains("Found 3 directories under"), "fast pass must report the real recursive directory count");
+        assertTrue(output.contains("/3 "), "real scan must show a live N/total progress bar using the known directory count");
+        assertFalse(output.contains("] 1/3  ") || output.contains("] 2/3  ") || output.contains("] 3/3  "),
+                "real scan's progress bar must not print a per-directory path label (that's what spammed the output)");
+        assertTrue(output.contains("Found 1 nested project."), "real scan must report how many nested projects it found");
+        assertTrue(output.contains("Generated files:"), "must list the generated files at the end");
+        assertTrue(output.contains("outer.h") && output.contains("libmod.h"),
+                "generated-files list must name both the outer and the nested project's output");
+    }
+
+    @Test
+    void alsoNestedRequiresConfirmation() throws Exception {
+        CliFixture outer = new CliFixture(temporaryDirectory, "n\n");
+        assertEquals(0, outer.run("init"));
+        assertEquals(0, outer.run("create", "interface", "outer_iic"));
+
+        assertEquals(1, outer.run("generate", "--also-nested"));
+        assertTrue(outer.output().contains("Cancelled"));
+        assertFalse(Files.exists(temporaryDirectory.resolve("outer_iic_I.h")),
+                "declining must cancel the whole command, including the plain generate");
+    }
+
+    @Test
+    void alsoNestedWorksWithNoOwningProjectAtAll() throws Exception {
+        Path searchRoot = temporaryDirectory.resolve("workspace");
+        Path libDirectory = searchRoot.resolve("some/deep/importedlib");
+        Files.createDirectories(libDirectory);
+        CliFixture lib = new CliFixture(libDirectory);
+        assertEquals(0, lib.run("init"));
+        assertEquals(0, lib.run("create", "interface", "lib_iic"));
+
+        // No cgen.yaml anywhere above searchRoot.
+        CliFixture noProject = new CliFixture(searchRoot, "y\n");
+        assertEquals(0, noProject.run("generate", "--also-nested"));
+        assertTrue(Files.exists(libDirectory.resolve("lib_iic_I.h")));
     }
 }
