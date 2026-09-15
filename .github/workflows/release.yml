@@ -52,3 +52,6 @@ jobs:
             target/SHA256SUMS
           fail_on_unmatched_files: true
           generate_release_notes: true
+          # A semver prerelease tag (v0.1.0-beta.3, v1.0.0-rc.1) carries a hyphen;
+          # a stable tag (v1.2.0) does not. Keeps betas out of "latest release".
+          prerelease: ${{ contains(github.ref_name, '-') }}
