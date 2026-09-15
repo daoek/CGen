@@ -71,7 +71,7 @@ public record ModuleSpec(
             }
             variables.add(new Variable(
                     InterfaceSpec.oneLine(Values.requiredString(item, "type", itemContext), itemContext + ".type"),
-                    Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name"),
+                    Values.variableDeclaratorName(Values.requiredString(item, "name", itemContext), itemContext + ".name"),
                     Values.optionalString(item, "description", "", itemContext), visibility,
                     initial));
         }

@@ -78,14 +78,18 @@ final class ModuleRenderer {
     }
 
     private static void requireAccessorsForPartialVisibility(ModuleSpec module, boolean accessors) {
-        if (accessors) {
-            return;
-        }
         for (ModuleSpec.Variable variable : module.variables()) {
-            if (variable.visibility() == ModuleSpec.Visibility.GET || variable.visibility() == ModuleSpec.Visibility.SET) {
+            boolean isGetOrSet = variable.visibility() == ModuleSpec.Visibility.GET
+                    || variable.visibility() == ModuleSpec.Visibility.SET;
+            if (isGetOrSet && !accessors) {
                 throw new CGenException(module.source() + ": variable '" + variable.name()
                         + "' visibility " + variable.visibility().name().toLowerCase()
                         + " requires format.publicVariables: accessors");
+            }
+            boolean exposed = variable.visibility() != ModuleSpec.Visibility.PRIVATE;
+            if (exposed && accessors && variable.name().indexOf('[') >= 0) {
+                throw new CGenException(module.source() + ": array variable '" + variable.name()
+                        + "' cannot use get/set accessors (format.publicVariables: accessors) - make it private");
             }
         }
     }

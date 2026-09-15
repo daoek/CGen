@@ -8,10 +8,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Function;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 final class Values {
     private static final Pattern C_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+    private static final Pattern ARRAY_DECLARATOR = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*(?:\\[[0-9]*])+");
+    private static final Pattern ARRAY_SUFFIX = Pattern.compile("(?:\\[[0-9]*])+$");
 
     private Values() {
     }
@@ -193,25 +196,28 @@ final class Values {
 
     static Map<String, Object> compactField(String text, String context) {
         String trimmed = text.strip();
+        Matcher arraySuffixMatch = ARRAY_SUFFIX.matcher(trimmed);
+        String arraySuffix = arraySuffixMatch.find() ? trimmed.substring(arraySuffixMatch.start()) : "";
+        String withoutArray = arraySuffix.isEmpty() ? trimmed : trimmed.substring(0, arraySuffixMatch.start());
         int splitIndex = -1;
-        for (int i = trimmed.length() - 1; i >= 0; i--) {
-            char c = trimmed.charAt(i);
+        for (int i = withoutArray.length() - 1; i >= 0; i--) {
+            char c = withoutArray.charAt(i);
             if (!(Character.isLetterOrDigit(c) || c == '_')) {
                 splitIndex = i;
                 break;
             }
         }
-        if (splitIndex < 0 || splitIndex == trimmed.length() - 1) {
+        if (splitIndex < 0 || splitIndex == withoutArray.length() - 1) {
             throw new CGenException(context + " must be \"type name\", got '" + text + "'");
         }
-        String name = trimmed.substring(splitIndex + 1);
-        String type = trimmed.substring(0, splitIndex + 1).strip();
-        if (type.isBlank() || !C_IDENTIFIER.matcher(name).matches()) {
+        String baseName = withoutArray.substring(splitIndex + 1);
+        String type = withoutArray.substring(0, splitIndex + 1).strip();
+        if (type.isBlank() || !C_IDENTIFIER.matcher(baseName).matches()) {
             throw new CGenException(context + " must be \"type name\", got '" + text + "'");
         }
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("type", type);
-        result.put("name", name);
+        result.put("name", baseName + arraySuffix);
         return result;
     }
 
@@ -233,6 +239,14 @@ final class Values {
     static String identifier(String value, String context) {
         if (!C_IDENTIFIER.matcher(value).matches()) {
             throw new CGenException(context + " must be a valid C identifier, got '" + value + "'");
+        }
+        return value;
+    }
+
+    static String variableDeclaratorName(String value, String context) {
+        if (!C_IDENTIFIER.matcher(value).matches() && !ARRAY_DECLARATOR.matcher(value).matches()) {
+            throw new CGenException(context + " must be a valid C identifier, optionally with array brackets"
+                    + " (e.g. 'buffer[6]'), got '" + value + "'");
         }
         return value;
     }

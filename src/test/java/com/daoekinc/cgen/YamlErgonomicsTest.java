@@ -60,6 +60,52 @@ class YamlErgonomicsTest {
     }
 
     @Test
+    void compactVariableSupportsArrayDeclarators() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("driver.module.yaml"), """
+                kind: module
+                name: driver
+                implements: []
+                includes: []
+                context: []
+                variables:
+                  - uint8_t command_buffer[6]
+                  - uint8_t status_flags[] public
+                """);
+
+        assertEquals(0, cli.run("generate"));
+
+        String header = Files.readString(temporaryDirectory.resolve("driver.h"));
+        String source = Files.readString(temporaryDirectory.resolve("driver.c"));
+        assertTrue(header.contains("extern uint8_t status_flags[];"));
+        assertTrue(source.contains("static uint8_t command_buffer[6];"));
+        assertTrue(source.contains("uint8_t status_flags[];"));
+    }
+
+    @Test
+    void arrayVariableRejectsAccessors() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Path project = temporaryDirectory.resolve("cgen.yaml");
+        Files.writeString(project, Files.readString(project).replace(
+                "format:\n  indent: 4\n  lineEnding: lf",
+                "format:\n  indent: 4\n  lineEnding: lf\n  publicVariables: accessors"));
+
+        Files.writeString(temporaryDirectory.resolve("driver.module.yaml"), """
+                kind: module
+                name: driver
+                implements: []
+                includes: []
+                context: []
+                variables:
+                  - uint8_t command_buffer[6] public
+                """);
+
+        assertEquals(1, cli.run("generate"));
+    }
+
+    @Test
     void distinctiveUsercodeMarkersReplaceOldFormat() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));

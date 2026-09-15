@@ -258,9 +258,11 @@ the context struct and variables, so `context`/`variables` entries can use
 them as a field type - same shape as [interface enums](#interface-yaml).
 
 Variables default to `private` (`static` storage) — write just `type name`.
-Append a trailing `public`, `get`, or `set` to expose one, or use the map form
-(`{ type: ..., name: ..., visibility: public, initial: ... }`) when you need
-`initial`/`description` alongside it. How a non-`private` variable is exposed
+`name` may carry an array declarator, e.g. `uint8_t command_buffer[6]` or
+`uint8_t status_flags[]`; it comes through unchanged onto the generated
+declaration. Append a trailing `public`, `get`, or `set` to expose one, or use
+the map form (`{ type: ..., name: ..., visibility: public, initial: ... }`)
+when you need `initial`/`description` alongside it. How a non-`private` variable is exposed
 is controlled project-wide by `format.publicVariables` (see
 [Project configuration](#project-configuration)): `extern` gives a `public`
 variable a plain `extern` declaration in the header and a definition in the
@@ -280,7 +282,10 @@ uint32_t get_transfer_count(void)
 `static`, with no counterpart function) — useful for a read-only counter or a
 write-only latch. `get`/`set` require `format.publicVariables: accessors`;
 using them under `extern` is a config error, since `extern` only knows
-`public`/`private`.
+`public`/`private`. An array variable (`public`, `get`, or `set`) is also a
+config error under `accessors`, since C can't return or take an array by
+value the way `get_<name>`/`set_<name>` would need to — keep array variables
+`private`, or expose them as `public` under `extern`.
 
 A module can also declare its own standalone functions, independent of any
 implemented interface:
