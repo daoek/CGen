@@ -1,0 +1,4 @@
+# Documentation build dependencies. Pinned so a docs build is reproducible.
+mkdocs==1.6.1
+mkdocs-material==9.5.49
+pymdown-extensions==10.12

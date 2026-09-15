@@ -35,3 +35,6 @@ replay_pid*
 Thumbs.db
 
 /Sandbox/**
+
+# MkDocs build output
+/site/

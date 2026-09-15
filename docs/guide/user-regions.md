@@ -1,0 +1,152 @@
+# User regions and regeneration
+
+User regions are the reason CGen can regenerate a file you have already edited. This page covers
+what they look like, which ones exist, what happens when a spec changes, and how to leave CGen
+behind for good.
+
+## The rule
+
+Edit **only** inside a named user region:
+
+```c
+/*@CGen usercode+ function.common_iic.write.body*/
+/* Your code is retained here, exactly as written. */
+/*@CGen usercode-*/
+```
+
+Everything outside such a pair belongs to CGen and is rewritten on every run. The markers are
+deliberately distinct from CGen's other `/*@CGen(...)*/` structural markers, so the two are easy to
+tell apart when scanning a file.
+
+!!! danger "Do not edit or delete the marker lines"
+
+    The `usercode+` line carries the region's name, which is how the next run knows where your code
+    belongs. Change or lose it and the code inside is no longer attached to anything.
+
+## How a region survives
+
+On each `generate`, CGen reads the existing output file, takes the text between every
+`usercode+` / `usercode-` pair, renders the structure fresh from the YAML, and pastes each saved
+block back into the region of the same name. The region's *content* is never inspected, parsed or
+reformatted — it comes back byte for byte.
+
+This means a region moves with its item. Reorder functions in the YAML, change a parameter type,
+switch `format.indent` from 4 to 2: the surrounding code is re-rendered, your body is not.
+
+## Which regions exist
+
+Regions are created by the generator, not by you — you cannot add one by inventing a name. Every
+generator page lists its own, but the naming is consistent:
+
+| Region | Where it appears |
+| --- | --- |
+| `interface.preamble`, `interface.declarations`, `interface.footer` | [Interface](../generators/interface.md) headers |
+| `module.header.preamble`, `module.header.footer` | [Module](../generators/module.md) headers |
+| `module.source.includes`, `module.source.variables`, `module.source.prototypes`, `module.source.footer` | Module sources |
+| `function.<interface>.<function>.body` | A module's implementation of an interface function |
+| `function.<name>.body` | A module's own standalone function |
+| `variable.<name>.get`, `variable.<name>.set` | Generated accessors, under `publicVariables: accessors` |
+| `singleton.init`, `singleton.else` | A `singleton: true` module |
+| `state.<STATE>.entry`, `state.<STATE>.exit`, `state.<STATE>.tick` | [State machine](../generators/state-machine.md) states |
+| `transition.<from>.<event>.guard`, `event.<EVENT>.unhandled` | State machine transitions |
+| `command.<NAME>.body`, `command.unknown` | [Command table](../generators/command-table.md) handlers |
+| `switchcase.<enum>.<case>` | A [`@CGenSwitch`](cgenswitch.md) case |
+
+[Observers](../generators/observer.md) and [status codes](../generators/status-codes.md) have no
+user regions at all — their output is entirely mechanical.
+
+## Where to put things that are not function bodies
+
+A generated module source has four regions specifically for the things that do not belong in any
+one function:
+
+```c
+#include "ra_iic.h"
+
+/*@CGen usercode+ module.source.includes*/
+#include "vendor_i2c.h"          /* extra includes go here */
+/*@CGen usercode-*/
+
+/*@CGen usercode+ module.source.variables*/
+static uint8_t scratch[32];      /* file-scope state CGen does not know about */
+/*@CGen usercode-*/
+
+/*@CGen usercode+ module.source.prototypes*/
+static void reset_bus(void);     /* forward declarations for your own helpers */
+/*@CGen usercode-*/
+```
+
+Helper *definitions* go in `module.source.footer` at the bottom of the file.
+
+!!! tip "Prefer the YAML when it can express it"
+
+    Anything CGen can generate — a variable, a standalone function, an enum — is better declared in
+    the YAML than hand-written into a region. You get the declaration, the documentation comment and
+    the header entry for free, and the next reader sees it in the spec.
+
+## Returning a value: `cgen_result`
+
+Generated non-`void` bodies are wrapped in a single-return shape, for
+[MISRA](misra.md) reasons:
+
+```c
+static common_iic_status_t ra_iic_common_iic_write(void *context, uint32_t length)
+{
+    common_iic_status_t cgen_result = COMMON_IIC_INVALID_PARAM;
+
+    /*@CGen usercode+ function.common_iic.write.body*/
+    cgen_result = COMMON_IIC_SUCCESS;   /* assign, do not return */
+    /*@CGen usercode-*/
+    return cgen_result;
+}
+```
+
+Assign your result to `cgen_result` instead of returning early. The initial value is the
+function's `invalidReturn`, so a stub you have not filled in yet fails safely rather than returning
+garbage.
+
+The module context is available as `module`, already cast from the generic `void *context`.
+
+## When you remove something from the YAML
+
+**Nothing you wrote is deleted.** If a YAML item disappears, its generated structure goes with it,
+but the user region is retained as an *orphan* — kept in the file, still named, no longer wrapped
+in any function. Move the code where it now belongs, then delete the empty region.
+
+A rename is a removal plus an addition, so you get an orphan holding the old body and a fresh
+empty region under the new name. (For the specific case of renaming a whole module, use
+[`CGen rename module`](../reference/cli.md#cgen-rename-module), which moves the files and updates
+the references for you.)
+
+## Files CGen will not touch
+
+Every generated file starts with a marker line naming the spec that produced it:
+
+```c
+/*@CGen(file:module-source:ra_iic.module.yaml)*/
+```
+
+If a file CGen is about to write already exists **without** that marker, generation fails rather
+than overwriting it. That is what protects a hand-written `ra_iic.c` that predates the spec.
+
+When you genuinely want that file replaced, pass
+[`--force`](../reference/cli.md#cgen-generate) — and check the file into version control first,
+because its content is gone afterwards.
+
+## Detaching permanently
+
+To remove CGen from a project for good:
+
+```console
+CGen detach
+```
+
+This destructive command requires typing the exact project `name` from `cgen.yaml` to confirm. It:
+
+- keeps **all** generated C code and every unrelated YAML file,
+- removes the CGen marker lines from the C files, then
+- deletes `cgen.yaml`, every `*.interface.yaml` and `*.module.yaml`, and the custom documentation
+  YAML the project referenced.
+
+The result is ordinary C with no trace of the generator. A detached project cannot be regenerated
+unless you configure it again from scratch with `CGen init`.

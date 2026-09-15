@@ -1,0 +1,116 @@
+site_name: CGen
+site_description: YAML-driven C interface and module generator with regeneration-safe user code regions.
+site_url: https://daoek.github.io/CGen/
+repo_url: https://github.com/daoek/CGen
+repo_name: daoek/CGen
+edit_uri: edit/main/docs/
+copyright: Copyright &copy; Daoek Inc.
+
+theme:
+  name: material
+  language: en
+  icon:
+    logo: material/chip
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme)"
+      toggle:
+        icon: material/brightness-auto
+        name: Follow system theme
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.instant
+    - navigation.instant.progress
+    - navigation.tracking
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.footer
+    - toc.follow
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/daoek/CGen
+      name: CGen on GitHub
+
+markdown_extensions:
+  - abbr
+  - admonition
+  - attr_list
+  - def_list
+  - footnotes
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+      toc_depth: 3
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.keys
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+
+plugins:
+  - search
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Quickstart: getting-started/quickstart.md
+      - How it works: getting-started/how-it-works.md
+  - Guide:
+      - Project configuration: guide/project-configuration.md
+      - User regions and regeneration: guide/user-regions.md
+      - "@CGenSwitch": guide/cgenswitch.md
+      - Nested projects: guide/nested-projects.md
+      - MISRA-oriented output: guide/misra.md
+      - Editor snippets: guide/editor-snippets.md
+  - Generators:
+      - Overview: generators/index.md
+      - Interface: generators/interface.md
+      - Module: generators/module.md
+      - State machine: generators/state-machine.md
+      - Observer: generators/observer.md
+      - Command table: generators/command-table.md
+      - Status codes: generators/status-codes.md
+      - Adapter: generators/adapter.md
+  - Reference:
+      - CLI: reference/cli.md
+      - YAML cheat sheet: reference/yaml-cheatsheet.md
+      - Troubleshooting: reference/troubleshooting.md

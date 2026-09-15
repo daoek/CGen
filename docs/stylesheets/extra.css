@@ -1,0 +1,41 @@
+/* CGen documentation — small refinements on top of Material defaults. */
+
+:root {
+  --md-code-font: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas,
+    "Liberation Mono", Menlo, monospace;
+}
+
+/* Landing page hero. */
+.cgen-hero {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 0.5rem;
+  padding: 1.6rem 1.6rem 1.2rem;
+  margin-bottom: 2rem;
+  background: var(--md-code-bg-color);
+}
+
+.cgen-hero h2 {
+  margin-top: 0;
+  font-weight: 700;
+}
+
+.cgen-hero p:last-child {
+  margin-bottom: 0;
+}
+
+/* Card grids read better with a little more air between the tiles. */
+.md-typeset .grid.cards > ul > li {
+  border-radius: 0.5rem;
+}
+
+/* Generated-code markers are the thing readers scan for — keep comments legible
+   rather than washed out in both palettes. */
+.md-typeset .highlight .c1,
+.md-typeset .highlight .cm {
+  font-style: normal;
+}
+
+/* Keep wide generated C lines readable instead of wrapping mid-declaration. */
+.md-typeset pre > code {
+  white-space: pre;
+}
