@@ -11,6 +11,7 @@ import com.daoekinc.cgen.model.ProjectConfig;
 import com.daoekinc.cgen.model.StateMachineSpec;
 import com.daoekinc.cgen.model.StatusCodesSpec;
 import com.daoekinc.cgen.project.ProjectService;
+import com.daoekinc.cgen.tag.SwitchTagProcessor;
 import com.daoekinc.cgen.tag.TagHelper;
 import com.daoekinc.cgen.tag.TagHelper.UserRegions;
 import java.io.IOException;
@@ -28,6 +29,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,6 +61,11 @@ public final class CGenerator {
     }
 
     public List<Path> generate(ProjectConfig project, Path scope, boolean force, ProgressListener progress) {
+        return generate(project, scope, force, progress, (enumType, sourceFile, members) -> false);
+    }
+
+    public List<Path> generate(ProjectConfig project, Path scope, boolean force, ProgressListener progress,
+                               SwitchEnumConfirmation switchEnumConfirmation) {
         DocumentationRenderer documentation = new DocumentationRenderer(project, yamlFiles);
         Map<String, InterfaceSpec> interfaces = loadInterfaces(project);
         List<ModulePlan> modules = new ArrayList<>();
@@ -181,10 +188,22 @@ public final class CGenerator {
                     sourceExisted, sourceRegions.regionCount()));
         }
 
+        boolean anySwitchTags = outputs.stream().anyMatch(output -> SwitchTagProcessor.isUsed(output.content()));
+        EnumIndex enumIndex = anySwitchTags ? buildEnumIndex(project) : null;
+        Map<Path, List<String>> linkedFileMembers = new LinkedHashMap<>();
+        Map<String, ExternalEnumMatch> resolvedExternal = new LinkedHashMap<>();
+        Map<Path, Set<String>> linkedThisRun = new LinkedHashMap<>();
+
         int total = outputs.size();
         int[] completed = {0};
         for (Output output : outputs) {
-            tags.writeGenerated(output.path(), output.content(), project.lineEnding());
+            String content = output.content();
+            if (enumIndex != null && SwitchTagProcessor.isUsed(content)) {
+                Function<String, List<String>> resolver = enumType -> resolveSwitchEnum(project, enumType, output.specSource(),
+                        enumIndex, linkedFileMembers, resolvedExternal, linkedThisRun, switchEnumConfirmation);
+                content = SwitchTagProcessor.process(content, output.path(), project.indent(), resolver);
+            }
+            tags.writeGenerated(output.path(), content, project.lineEnding());
             completed[0]++;
             progress.onFileGenerated(completed[0], total, output.specSource(), output.path(), output.existed(), output.regionsCarried());
         }
@@ -194,6 +213,168 @@ public final class CGenerator {
     @FunctionalInterface
     public interface ProgressListener {
         void onFileGenerated(int completed, int total, Path specSource, Path outputPath, boolean existed, int regionsCarried);
+    }
+
+    @FunctionalInterface
+    public interface SwitchEnumConfirmation {
+        /** Asked once per externally-resolved enum (not declared in any YAML enums:), before it's used. */
+        boolean confirm(String enumType, Path sourceFile, List<String> members);
+    }
+
+    /**
+     * Every enum the project already declares in YAML, as of the start of this generate() call -
+     * never updated as enums get persisted mid-run, so a later lookup for a DIFFERENT owning spec
+     * still goes through {@link #resolveSwitchEnum} and gets its own copy persisted too.
+     */
+    /**
+     * Snapshot of every enum the project can resolve an @CGenSwitch against, taken once at the
+     * start of generate() and never updated mid-run (a spec newly linked during this run must still
+     * be looked up through {@link #resolveSwitchEnum}, so a second output needing the same enum for
+     * a DIFFERENT owning spec gets its own link persisted too, not silently reused).
+     *
+     * @param declared enum type -> member names, from every {@code enums:} block in the project -
+     *                 CGen owns and emits a typedef for these; never populated from a link.
+     * @param links owning module.yaml -> (enum type -> the file, elsewhere, that already declares
+     *              it) from that module's own {@code externalEnums:} - CGen never emits a typedef
+     *              for these, only reads the given file to get the case list.
+     */
+    private record EnumIndex(Map<String, List<String>> declared, Map<Path, Map<String, Path>> links) {
+    }
+
+    private EnumIndex buildEnumIndex(ProjectConfig project) {
+        Map<String, List<String>> declared = new LinkedHashMap<>();
+        for (InterfaceSpec spec : loadInterfaces(project).values()) {
+            registerEnums(declared, spec.enums(), spec.source());
+        }
+        Map<Path, Map<String, Path>> links = new LinkedHashMap<>();
+        for (Path path : specificationFiles(project.root(), ".module.yaml", project)) {
+            ModuleSpec module = ModuleSpec.from(path, yamlFiles.load(path));
+            registerEnums(declared, module.enums(), path);
+            Map<String, Path> perModule = new LinkedHashMap<>();
+            for (ModuleSpec.ExternalEnumLink link : module.externalEnums()) {
+                perModule.put(link.name(), path.getParent().resolve(link.file()).normalize());
+            }
+            links.put(path, perModule);
+        }
+        return new EnumIndex(declared, links);
+    }
+
+    private List<String> resolveSwitchEnum(ProjectConfig project, String enumType, Path owningSpec, EnumIndex index,
+                                           Map<Path, List<String>> linkedFileMembers, Map<String, ExternalEnumMatch> resolvedExternal,
+                                           Map<Path, Set<String>> linkedThisRun, SwitchEnumConfirmation confirmation) {
+        List<String> declared = index.declared().get(enumType);
+        if (declared != null) {
+            return declared;
+        }
+        Path linkedFile = index.links().getOrDefault(owningSpec, Map.of()).get(enumType);
+        if (linkedFile != null) {
+            return linkedFileMembers.computeIfAbsent(linkedFile, file -> readEnumMembersFromFile(file, enumType));
+        }
+        boolean alreadyLinkedThisRun = linkedThisRun.getOrDefault(owningSpec, Set.of()).contains(enumType);
+        ExternalEnumMatch match = resolvedExternal.computeIfAbsent(enumType, type -> resolveExternalEnum(project, type, confirmation));
+        if (!alreadyLinkedThisRun && isModuleSpec(owningSpec)) {
+            String relativeFile = owningSpec.getParent().toAbsolutePath().normalize()
+                    .relativize(match.file().toAbsolutePath().normalize()).toString().replace('\\', '/');
+            projects.appendExternalEnumLink(owningSpec, enumType, relativeFile);
+            linkedThisRun.computeIfAbsent(owningSpec, spec -> new LinkedHashSet<>()).add(enumType);
+        }
+        return match.members();
+    }
+
+    private static boolean isModuleSpec(Path specSource) {
+        return specSource.getFileName().toString().endsWith(".module.yaml");
+    }
+
+    private static void registerEnums(Map<String, List<String>> declaredEnums, List<InterfaceSpec.EnumDef> enums, Path source) {
+        for (InterfaceSpec.EnumDef enumDef : enums) {
+            List<String> members = enumDef.values().stream().map(InterfaceSpec.EnumValue::name).toList();
+            List<String> previous = declaredEnums.putIfAbsent(enumDef.name(), members);
+            if (previous != null && !previous.equals(members)) {
+                throw new CGenException("Enum '" + enumDef.name()
+                        + "' is declared with different members in more than one YAML file (conflict found near " + source + ")");
+            }
+        }
+    }
+
+    private record ExternalEnumMatch(Path file, List<String> members) {
+    }
+
+    private static Pattern typedefEnumPattern(String enumType) {
+        return Pattern.compile(
+                "typedef\\s+enum\\s*(?:[A-Za-z_][A-Za-z0-9_]*\\s*)?\\{([^}]*)\\}\\s*" + Pattern.quote(enumType) + "\\s*;",
+                Pattern.DOTALL);
+    }
+
+    private static List<String> readEnumMembersFromFile(Path file, String enumType) {
+        if (!Files.isRegularFile(file)) {
+            throw new CGenException("Linked enum file " + file + " for '" + enumType + "' no longer exists");
+        }
+        String text;
+        try {
+            text = Files.readString(file);
+        } catch (IOException exception) {
+            throw new CGenException("Cannot read linked enum file " + file + ": " + exception.getMessage(), exception);
+        }
+        Matcher matcher = typedefEnumPattern(enumType).matcher(text);
+        if (!matcher.find()) {
+            throw new CGenException(file + " no longer defines 'typedef enum { ... } " + enumType
+                    + ";' - fix or remove its externalEnums: link");
+        }
+        return parseEnumMembers(matcher.group(1));
+    }
+
+    private List<ExternalEnumMatch> findExternalEnumMatches(ProjectConfig project, String enumType) {
+        Pattern typedefEnum = typedefEnumPattern(enumType);
+        List<Path> candidateFiles = new ArrayList<>();
+        candidateFiles.addAll(specificationFiles(project.root(), ".h", project));
+        candidateFiles.addAll(specificationFiles(project.root(), ".c", project));
+        List<ExternalEnumMatch> matches = new ArrayList<>();
+        for (Path path : candidateFiles) {
+            String text;
+            try {
+                text = Files.readString(path);
+            } catch (IOException exception) {
+                continue;
+            }
+            Matcher matcher = typedefEnum.matcher(text);
+            if (matcher.find()) {
+                matches.add(new ExternalEnumMatch(path, parseEnumMembers(matcher.group(1))));
+            }
+        }
+        return matches;
+    }
+
+    private ExternalEnumMatch resolveExternalEnum(ProjectConfig project, String enumType, SwitchEnumConfirmation confirmation) {
+        List<ExternalEnumMatch> matches = findExternalEnumMatches(project, enumType);
+        if (matches.isEmpty()) {
+            throw new CGenException("@CGenSwitch " + enumType + " is not declared in any YAML enums: block, and no "
+                    + "matching 'typedef enum { ... } " + enumType + ";' was found in the project's .h/.c files");
+        }
+        ExternalEnumMatch first = matches.get(0);
+        for (ExternalEnumMatch other : matches) {
+            if (!other.members().equals(first.members())) {
+                throw new CGenException("@CGenSwitch " + enumType + " matches conflicting 'typedef enum' definitions in "
+                        + first.file() + " and " + other.file() + " - remove the duplicate before generating");
+            }
+        }
+        if (!confirmation.confirm(enumType, first.file(), first.members())) {
+            throw new CGenException("@CGenSwitch " + enumType + ": use of the enum found in " + first.file() + " was not confirmed");
+        }
+        return first;
+    }
+
+    private static List<String> parseEnumMembers(String body) {
+        List<String> members = new ArrayList<>();
+        for (String rawEntry : body.split(",")) {
+            Matcher nameMatch = C_IDENTIFIER.matcher(rawEntry.strip());
+            if (nameMatch.find() && nameMatch.start() == 0) {
+                members.add(nameMatch.group());
+            }
+        }
+        if (members.isEmpty()) {
+            throw new CGenException("Matched 'typedef enum' has no members");
+        }
+        return members;
     }
 
     public List<Path> cleanTags(ProjectConfig project, Path scope) {
@@ -475,6 +656,32 @@ public final class CGenerator {
             });
         } catch (IOException exception) {
             throw new CGenException("Cannot scan " + directory + ": " + exception.getMessage(), exception);
+        }
+        return found.stream().sorted(Comparator.comparing(Path::toString)).toList();
+    }
+
+    /**
+     * Finds every {@code cgen.yaml} strictly inside {@code scope} (nested-of-nested included),
+     * for {@code generate --also-nested}. Unlike {@link #specificationFiles}, this does not stop
+     * descending at a nested project boundary - finding what's past it is the point.
+     */
+    public List<Path> findNestedProjectRoots(Path scope) {
+        List<Path> found = new ArrayList<>();
+        try {
+            Files.walkFileTree(scope, new SimpleFileVisitor<>() {
+                @Override
+                public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                    if (isExcludedProjectPath(scope, dir)) {
+                        return FileVisitResult.SKIP_SUBTREE;
+                    }
+                    if (!dir.equals(scope) && Files.isRegularFile(dir.resolve(ProjectService.PROJECT_FILE))) {
+                        found.add(dir.resolve(ProjectService.PROJECT_FILE));
+                    }
+                    return FileVisitResult.CONTINUE;
+                }
+            });
+        } catch (IOException exception) {
+            throw new CGenException("Cannot scan " + scope + ": " + exception.getMessage(), exception);
         }
         return found.stream().sorted(Comparator.comparing(Path::toString)).toList();
     }

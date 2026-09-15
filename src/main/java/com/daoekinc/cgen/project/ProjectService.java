@@ -9,6 +9,7 @@ import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -59,11 +60,118 @@ public final class ProjectService {
         while (current != null) {
             Path projectFile = current.resolve(PROJECT_FILE);
             if (Files.isRegularFile(projectFile)) {
-                return ProjectConfig.from(projectFile, yamlFiles.load(projectFile));
+                return load(projectFile);
             }
             current = current.getParent();
         }
         throw new CGenException("No " + PROJECT_FILE + " found in this directory or its parents; run 'CGen init' first");
+    }
+
+    /** Loads a project from a known {@code cgen.yaml} path directly, e.g. one found under a nested project boundary. */
+    public ProjectConfig load(Path projectFile) {
+        return ProjectConfig.from(projectFile, yamlFiles.load(projectFile));
+    }
+
+    /**
+     * Adds a {@code { name: <enumType>, file: <relativeFilePath> }} entry under {@code specFile}'s
+     * {@code externalEnums:} - a link to where an @CGenSwitch enum is actually declared (found by
+     * scanning .h/.c files, confirmed by the user), not a copy of it: CGen must never also declare
+     * it under {@code enums:}, or the generated header would redefine a type that already exists,
+     * breaking the build. A plain text insertion (not a YAML re-serialization) so the rest of the
+     * hand-authored file, comments included, is untouched; verified by re-parsing afterward, with
+     * the change rolled back if that fails, since this is the one place CGen writes into a file it
+     * doesn't fully own and generate.
+     */
+    public void appendExternalEnumLink(Path specFile, String enumType, String relativeFilePath) {
+        String original;
+        try {
+            original = Files.readString(specFile, StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new CGenException("Cannot read " + specFile + ": " + exception.getMessage(), exception);
+        }
+        String lineEnding = original.contains("\r\n") ? "\r\n" : "\n";
+        List<String> lines = new ArrayList<>(List.of(original.replace("\r\n", "\n").split("\n", -1)));
+        boolean trailingNewline = !lines.isEmpty() && lines.get(lines.size() - 1).isEmpty();
+        if (trailingNewline) {
+            lines.remove(lines.size() - 1);
+        }
+        List<String> updated = insertExternalEnumLink(lines, enumType, relativeFilePath, specFile);
+        String updatedText = String.join(lineEnding, updated) + (trailingNewline ? lineEnding : "");
+        try {
+            Files.writeString(specFile, updatedText, StandardCharsets.UTF_8);
+        } catch (IOException exception) {
+            throw new CGenException("Cannot write " + specFile + ": " + exception.getMessage(), exception);
+        }
+        try {
+            yamlFiles.load(specFile);
+        } catch (RuntimeException exception) {
+            try {
+                Files.writeString(specFile, original, StandardCharsets.UTF_8);
+            } catch (IOException rollbackFailure) {
+                throw new CGenException(specFile + " was left in a broken state while linking enum '" + enumType
+                        + "' and could not be rolled back automatically: " + rollbackFailure.getMessage(), rollbackFailure);
+            }
+            throw new CGenException(specFile + ": could not link enum '" + enumType
+                    + "' automatically (change rolled back) - add it under externalEnums: by hand instead: " + exception.getMessage(),
+                    exception);
+        }
+    }
+
+    private static List<String> insertExternalEnumLink(List<String> lines, String enumType, String relativeFilePath, Path specFile) {
+        String entry = "  - { name: " + enumType + ", file: " + relativeFilePath + " }";
+        int keyIndex = -1;
+        for (int i = 0; i < lines.size(); i++) {
+            if (lines.get(i).equals("externalEnums: []") || lines.get(i).matches("externalEnums:\\s*")) {
+                keyIndex = i;
+                break;
+            }
+        }
+        List<String> updated = new ArrayList<>();
+        if (keyIndex < 0) {
+            int includesIndex = -1;
+            for (int i = 0; i < lines.size(); i++) {
+                if (lines.get(i).matches("includes:.*")) {
+                    includesIndex = i;
+                    break;
+                }
+            }
+            if (includesIndex < 0) {
+                throw new CGenException(specFile + ": cannot find 'includes:' to add a new 'externalEnums:' block near - "
+                        + "add 'externalEnums: []' to this file once, then regenerate");
+            }
+            int insertAt = endOfKeyBlock(lines, includesIndex);
+            updated.addAll(lines.subList(0, insertAt));
+            updated.add("");
+            updated.add("externalEnums:");
+            updated.add(entry);
+            updated.addAll(lines.subList(insertAt, lines.size()));
+        } else if (lines.get(keyIndex).equals("externalEnums: []")) {
+            updated.addAll(lines.subList(0, keyIndex));
+            updated.add("externalEnums:");
+            updated.add(entry);
+            updated.addAll(lines.subList(keyIndex + 1, lines.size()));
+        } else {
+            int blockEnd = endOfIndentedBlock(lines, keyIndex + 1);
+            updated.addAll(lines.subList(0, blockEnd));
+            updated.add(entry);
+            updated.addAll(lines.subList(blockEnd, lines.size()));
+        }
+        return updated;
+    }
+
+    private static int endOfKeyBlock(List<String> lines, int keyLineIndex) {
+        if (!lines.get(keyLineIndex).matches("[A-Za-z]+:\\s*")) {
+            return keyLineIndex + 1;
+        }
+        return endOfIndentedBlock(lines, keyLineIndex + 1);
+    }
+
+    private static int endOfIndentedBlock(List<String> lines, int startIndex) {
+        int i = startIndex;
+        while (i < lines.size() && !lines.get(i).isBlank() && (lines.get(i).startsWith(" ") || lines.get(i).startsWith("\t"))) {
+            i++;
+        }
+        return i;
     }
 
     public Path createInterface(ProjectConfig project, String requestedName, Path requestedDirectory) {

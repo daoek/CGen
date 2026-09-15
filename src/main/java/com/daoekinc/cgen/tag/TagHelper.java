@@ -61,29 +61,47 @@ public final class TagHelper {
         }
     }
 
+    /**
+     * A top-level user region's saved body is everything between its begin/end markers,
+     * verbatim - including any inner begin/end marker lines a tool like @CGenSwitch left
+     * there (e.g. per-case regions nested inside a function body). Those inner markers are
+     * not extracted as regions of their own here; only the depth-0 begin/end pair is. A
+     * marker's own tool (e.g. SwitchTagProcessor) re-parses that raw body text itself.
+     */
     private static Map<String, String> extract(String content, Path file) {
         Map<String, String> regions = new LinkedHashMap<>();
         String current = null;
         List<String> body = null;
+        int depth = 0;
         for (String line : content.split("\\R", -1)) {
             String beginName = CGenTag.userBeginName(line);
-            if (beginName != null) {
-                if (current != null) {
-                    throw new CGenException("Nested user region in " + file);
-                }
-                current = beginName;
-                if (current.isBlank() || regions.containsKey(current)) {
-                    throw new CGenException("Invalid or duplicate user region in " + file);
-                }
-                body = new ArrayList<>();
-            } else if (CGenTag.isUserEnd(line)) {
-                if (current == null) {
+            boolean isEnd = CGenTag.isUserEnd(line);
+            if (current == null) {
+                if (beginName != null) {
+                    if (beginName.isBlank() || regions.containsKey(beginName)) {
+                        throw new CGenException("Invalid or duplicate user region in " + file);
+                    }
+                    current = beginName;
+                    body = new ArrayList<>();
+                    depth = 1;
+                } else if (isEnd) {
                     throw new CGenException("Unexpected end of user region in " + file);
                 }
-                regions.put(current, String.join("\n", body));
-                current = null;
-                body = null;
-            } else if (current != null) {
+                continue;
+            }
+            if (beginName != null) {
+                depth++;
+                body.add(line);
+            } else if (isEnd) {
+                depth--;
+                if (depth == 0) {
+                    regions.put(current, String.join("\n", body));
+                    current = null;
+                    body = null;
+                } else {
+                    body.add(line);
+                }
+            } else {
                 body.add(line);
             }
         }

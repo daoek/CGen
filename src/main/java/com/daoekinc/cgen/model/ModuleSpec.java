@@ -20,9 +20,19 @@ public record ModuleSpec(
         List<Function> functions,
         boolean singleton,
         String instanceName,
-        boolean singletonElse) {
+        boolean singletonElse,
+        List<ExternalEnumLink> externalEnums) {
 
     public record Variable(String type, String name, String description, Visibility visibility, String initial) {
+    }
+
+    /**
+     * Points an @CGenSwitch enum name at the file (relative to this module.yaml) that already
+     * declares it - a link, not a declaration: CGen never emits its own typedef for these, it only
+     * reads {@code file} to get the case list. Recorded automatically once you confirm a
+     * project-scanned enum for this module; see the "@CGenSwitch" section of the README.
+     */
+    public record ExternalEnumLink(String name, String file) {
     }
 
     public record Function(InterfaceSpec.Function spec, Visibility visibility) {
@@ -38,7 +48,8 @@ public record ModuleSpec(
     public static ModuleSpec from(Path source, Map<String, Object> yaml) {
         String contextName = source.toString();
         Values.onlyKeys(yaml, contextName, "kind", "name", "description", "header", "source", "implements",
-                "includes", "enums", "context", "variables", "functions", "singleton", "instance", "singletonElse");
+                "includes", "enums", "context", "variables", "functions", "singleton", "instance", "singletonElse",
+                "externalEnums");
         if (!Values.requiredString(yaml, "kind", contextName).equals("module")) {
             throw new CGenException(contextName + ".kind must be module");
         }
@@ -102,8 +113,19 @@ public record ModuleSpec(
         String instanceName = Values.identifier(
                 Values.optionalString(yaml, "instance", name + "_instance", contextName), contextName + ".instance");
         boolean singletonElse = Boolean.parseBoolean(Values.optionalString(yaml, "singletonElse", "false", contextName));
+
+        List<ExternalEnumLink> externalEnums = new ArrayList<>();
+        for (Map<String, Object> item : Values.mapList(yaml, "externalEnums", contextName)) {
+            String itemContext = contextName + ".externalEnums";
+            Values.onlyKeys(item, itemContext, "name", "file");
+            externalEnums.add(new ExternalEnumLink(
+                    Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name"),
+                    InterfaceSpec.oneLine(Values.requiredString(item, "file", itemContext), itemContext + ".file")));
+        }
+        Values.uniqueNames(externalEnums.stream().map(ExternalEnumLink::name).toList(), contextName + ".externalEnums");
+
         return new ModuleSpec(source, name, common.description(), common.header(), common.sourceFile(),
                 List.copyOf(implemented), common.includes(), enums, common.context(), List.copyOf(variables), List.copyOf(functions),
-                singleton, instanceName, singletonElse);
+                singleton, instanceName, singletonElse, List.copyOf(externalEnums));
     }
 }

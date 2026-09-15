@@ -219,6 +219,7 @@ public final class CGenCli {
     private int generate(String[] args) {
         boolean force = false;
         boolean verbose = false;
+        boolean alsoNested = false;
         Path directory = workingDirectory;
         boolean directorySpecified = false;
         for (int index = 1; index < args.length; index++) {
@@ -226,11 +227,13 @@ public final class CGenCli {
                 force = true;
             } else if (args[index].equals("-v") || args[index].equals("--verbose")) {
                 verbose = true;
+            } else if (args[index].equals("--also-nested")) {
+                alsoNested = true;
             } else if (!directorySpecified) {
                 directory = resolveDirectory(args[index]);
                 directorySpecified = true;
             } else {
-                throw new CGenException("Usage: CGen generate [directory] [-f|--force] [-v|--verbose]");
+                throw new CGenException("Usage: CGen generate [directory] [-f|--force] [-v|--verbose] [--also-nested]");
             }
         }
         ProjectConfig project = projects.findAndLoad(workingDirectory);
@@ -239,12 +242,41 @@ public final class CGenCli {
             out.println("Project root: " + project.root());
             out.println("Scope: " + scope);
         }
-        List<Path> files = generator.generate(project, scope, force, progressListener(project, verbose));
+        List<Path> files = new ArrayList<>(
+                generator.generate(project, scope, force, progressListener(project, verbose), switchEnumConfirmation(project)));
+        if (alsoNested) {
+            for (Path nestedProjectFile : generator.findNestedProjectRoots(scope)) {
+                ProjectConfig nestedProject = projects.load(nestedProjectFile);
+                if (verbose) {
+                    out.println("Nested project: " + nestedProject.root());
+                }
+                files.addAll(generator.generate(nestedProject, nestedProject.root(), force,
+                        progressListener(nestedProject, verbose), switchEnumConfirmation(nestedProject)));
+            }
+        }
         if (!files.isEmpty()) {
             out.println();
         }
         out.println(files.size() + " file(s) generated");
         return 0;
+    }
+
+    private CGenerator.SwitchEnumConfirmation switchEnumConfirmation(ProjectConfig project) {
+        return (enumType, sourceFile, members) -> {
+            out.println();
+            out.println(YELLOW_BOLD + "@CGenSwitch " + enumType + " is not declared in any YAML enums: block." + RESET);
+            out.println("Found a matching 'typedef enum' in " + project.root().relativize(sourceFile) + ":");
+            out.println("  " + String.join(", ", members));
+            out.print("Use this enum? [y/N]: ");
+            out.flush();
+            String answer;
+            try {
+                answer = input.readLine();
+            } catch (IOException exception) {
+                throw new CGenException("Cannot read confirmation: " + exception.getMessage(), exception);
+            }
+            return answer != null && (answer.equalsIgnoreCase("y") || answer.equalsIgnoreCase("yes"));
+        };
     }
 
     private CGenerator.ProgressListener progressListener(ProjectConfig project, boolean verbose) {
@@ -348,7 +380,7 @@ public final class CGenCli {
                   CGen create command-table <name> [directory]
                   CGen create status-codes <name> [directory]
                   CGen create adapter <name> --from <interface> --to <interface> [directory]
-                  CGen gen | generate [directory] [-f|--force] [-v|--verbose]
+                  CGen gen | generate [directory] [-f|--force] [-v|--verbose] [--also-nested]
                   CGen rename module <old-name> <new-name>
                   CGen detach
 
@@ -360,6 +392,11 @@ public final class CGenCli {
                   generate: print the project root, scope, and for every output file which
                   spec produced it, whether it's new or was regenerated, and how many user
                   regions were carried over - instead of the progress bar.
+
+                --also-nested
+                  generate: also generate every nested project found under the scanned
+                  directory (any subdirectory with its own cgen.yaml, normally left alone),
+                  each using its own cgen.yaml settings - not the outer project's.
                 """);
     }
 }
