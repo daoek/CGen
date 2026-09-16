@@ -13,8 +13,9 @@ import java.util.regex.Pattern;
 
 final class Values {
     private static final Pattern C_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
-    private static final Pattern ARRAY_DECLARATOR = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*(?:\\[[0-9]*])+");
-    private static final Pattern ARRAY_SUFFIX = Pattern.compile("(?:\\[[0-9]*])+$");
+    private static final String ARRAY_BOUND = "(?:\\[(?:[0-9]+|[A-Za-z_][A-Za-z0-9_]*)?])+";
+    private static final Pattern ARRAY_DECLARATOR = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*" + ARRAY_BOUND);
+    private static final Pattern ARRAY_SUFFIX = Pattern.compile(ARRAY_BOUND + "$");
 
     private Values() {
     }

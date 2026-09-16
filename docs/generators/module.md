@@ -94,6 +94,7 @@ variables:
   - bool busy                          # private
   - uint32_t transfer_count public     # exposed
   - uint8_t command_buffer[6]          # array declarator comes through unchanged
+  - uint8_t rx_buffer[RX_BUFFER_SIZE]  # bound may be a number, a macro/constant name, or empty
   - uint8_t status_flags[]
   - { type: uint32_t, name: ticks, visibility: public, initial: '0U', description: Uptime }
 ```

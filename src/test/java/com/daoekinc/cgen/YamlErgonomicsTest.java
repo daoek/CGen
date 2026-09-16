@@ -70,7 +70,8 @@ class YamlErgonomicsTest {
                 includes: []
                 context: []
                 variables:
-                  - uint8_t command_buffer[6]
+                  - uint8_t command_buffer[COMMAND_BUFFER_SIZE]
+                  - uint8_t frame[2][FRAME_LEN]
                   - uint8_t status_flags[] public
                 """);
 
@@ -79,7 +80,8 @@ class YamlErgonomicsTest {
         String header = Files.readString(temporaryDirectory.resolve("driver.h"));
         String source = Files.readString(temporaryDirectory.resolve("driver.c"));
         assertTrue(header.contains("extern uint8_t status_flags[];"));
-        assertTrue(source.contains("static uint8_t command_buffer[6];"));
+        assertTrue(source.contains("static uint8_t command_buffer[COMMAND_BUFFER_SIZE];"));
+        assertTrue(source.contains("static uint8_t frame[2][FRAME_LEN];"));
         assertTrue(source.contains("uint8_t status_flags[];"));
     }
 
