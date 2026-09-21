@@ -52,18 +52,31 @@ public final class CGenCli {
 
     public int run(String... args) {
         try {
-            if (args.length == 0 || args[0].equals("help") || args[0].equals("--help") || args[0].equals("-h")) {
+            if (args.length == 0) {
                 usage(out);
                 return 0;
             }
-            return switch (args[0]) {
+            String command = args[0];
+            if (command.equals("help") || command.equals("--help") || command.equals("-h")) {
+                if (args.length > 1) {
+                    printCommandHelp(args[1]);
+                } else {
+                    usage(out);
+                }
+                return 0;
+            }
+            if (hasHelpFlag(args)) {
+                printCommandHelp(command);
+                return 0;
+            }
+            return switch (command) {
                 case "init" -> init(args);
                 case "create" -> create(args);
                 case "gen", "generate" -> generate(args);
                 case "rename" -> rename(args);
                 case "detach" -> detach(args);
                 case "fix-prototypes" -> fixPrototypes(args);
-                default -> throw new CGenException("Unknown command '" + args[0] + "'");
+                default -> throw new CGenException("Unknown command '" + command + "'");
             };
         } catch (CGenException exception) {
             printError(exception);
@@ -547,50 +560,126 @@ public final class CGenCli {
         throw new CGenException(usage);
     }
 
+    private record Command(String display, List<String> keys, String summary, String detail) {
+    }
+
+    private static final List<Command> COMMANDS = List.of(
+            new Command("init", List.of("init"),
+                    "Create a new cgen.yaml project", """
+                            Usage: CGen init [directory] [-f|--force]
+
+                            Creates cgen.yaml - and nothing else. Without a directory it writes in the
+                            current one.
+
+                            -f, --force   Overwrite an existing cgen.yaml instead of refusing.
+                            """),
+            new Command("create", List.of("create"),
+                    "Scaffold a new interface, module, or other spec", """
+                            Usage:
+                              CGen create interface <name> [directory]
+                              CGen create module <name> [directory] [--implements <interface>[,<interface>...]]
+                              CGen create state-machine <name> [directory]
+                              CGen create observer <name> --interface <interface> [directory] [--capacity <n>]
+                              CGen create command-table <name> [directory]
+                              CGen create status-codes <name> [directory]
+                              CGen create adapter <name> --from <interface> --to <interface> [directory]
+
+                            Writes a spec file into directory, creating it when needed. Without a
+                            directory it writes in the current one. `create` writes YAML only; run
+                            `CGen generate` to produce the C.
+
+                            --implements <name>[,<name>...]   module: interfaces the module implements.
+                            --interface <name>                 observer: the listener interface. Required.
+                            --capacity <n>                     observer: maximum subscribers.
+                            --from <interface>                 adapter: the interface it exposes. Required.
+                            --to <interface>                   adapter: the interface it calls into. Required.
+                            --dir <directory>                  all: target directory as a flag instead of positional.
+                            """),
+            new Command("gen, generate", List.of("gen", "generate"),
+                    "Generate C source from YAML specs", """
+                            Usage: CGen gen | generate [directory] [-f|--force] [-v|--verbose] [--also-nested]
+
+                            Scans the given directory tree (the current one by default), resolves every
+                            spec, and writes the headers and sources. Idempotent: running it twice
+                            produces identical files the second time.
+
+                            -f, --force
+                              Overwrite files on disk that aren't CGen-generated instead of refusing.
+
+                            -v, --verbose
+                              Print the project root, scope, and for every output file which spec
+                              produced it, whether it's new or was regenerated, and how many user
+                              regions were carried over - instead of the progress bar.
+
+                            --also-nested
+                              Also generate every nested project found under the scanned directory
+                              (any subdirectory with its own cgen.yaml, normally left alone), each
+                              using its own cgen.yaml settings - not the outer project's. Works even
+                              when the starting directory has no cgen.yaml of its own; it's then used
+                              only as a search root. First does a fast multithreaded directory count
+                              (live progress, no cgen.yaml checking yet) and asks for confirmation
+                              with that count; only once confirmed does the slower real scan run -
+                              checking each directory for a cgen.yaml, live progress again - before
+                              generating anything.
+                            """),
+            new Command("rename", List.of("rename"),
+                    "Rename a module and update every reference to it", """
+                            Usage: CGen rename module <old-name> <new-name>
+
+                            Moves the module's spec file and its generated header and source, updates
+                            references, and regenerates the project in the same run.
+                            """),
+            new Command("fix-prototypes", List.of("fix-prototypes"),
+                    "Add missing prototypes for hand-written functions", """
+                            Usage: CGen fix-prototypes [directory]
+
+                            Scans every CGen-generated module source (.c) file in scope for functions the
+                            user wrote directly inside a usercode region that have no prototype anywhere in
+                            the file (plain user code, not YAML-spec'd module functions - those already get
+                            one). For each file with findings, shows a unified diff (3 lines of context)
+                            of the prototypes it would add to the module.source.prototypes usercode region
+                            at the top of the file, and asks to confirm before writing anything.
+                            """),
+            new Command("detach", List.of("detach"),
+                    "Remove CGen tags and generated-file tracking (destructive)", """
+                            Usage: CGen detach
+
+                            DESTRUCTIVE: permanently removes CGen from the project. Keeps generated C
+                            code and unrelated YAML; removes the CGen marker lines, then deletes
+                            cgen.yaml, every *.interface.yaml and *.module.yaml, and the custom
+                            documentation YAML the project referenced. Asks for the project name to
+                            confirm.
+                            """));
+
+    private static boolean hasHelpFlag(String[] args) {
+        for (int index = 1; index < args.length; index++) {
+            if (args[index].equals("--help") || args[index].equals("-h")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private void printCommandHelp(String name) {
+        for (Command command : COMMANDS) {
+            if (command.keys().contains(name)) {
+                out.print(command.detail());
+                return;
+            }
+        }
+        throw new CGenException("Unknown command '" + name + "'");
+    }
+
     private static void usage(PrintStream stream) {
-        stream.println("""
-                CGen - YAML-driven C interface and module generator
-
-                Usage:
-                  CGen init [directory] [-f|--force]
-                  CGen create interface <name> [directory]
-                  CGen create module <name> [directory] [--implements <interface>[,<interface>...]]
-                  CGen create state-machine <name> [directory]
-                  CGen create observer <name> --interface <interface> [directory] [--capacity <n>]
-                  CGen create command-table <name> [directory]
-                  CGen create status-codes <name> [directory]
-                  CGen create adapter <name> --from <interface> --to <interface> [directory]
-                  CGen gen | generate [directory] [-f|--force] [-v|--verbose] [--also-nested]
-                  CGen rename module <old-name> <new-name>
-                  CGen fix-prototypes [directory]
-                  CGen detach
-
-                -f, --force
-                  init: overwrite an existing cgen.yaml instead of refusing.
-                  generate: overwrite files on disk that aren't CGen-generated instead of refusing.
-
-                -v, --verbose
-                  generate: print the project root, scope, and for every output file which
-                  spec produced it, whether it's new or was regenerated, and how many user
-                  regions were carried over - instead of the progress bar.
-
-                --also-nested
-                  generate: also generate every nested project found under the scanned
-                  directory (any subdirectory with its own cgen.yaml, normally left alone),
-                  each using its own cgen.yaml settings - not the outer project's. Works even
-                  when the starting directory has no cgen.yaml of its own; it's then used only
-                  as a search root. First does a fast multithreaded directory count (live
-                  progress, no cgen.yaml checking yet) and asks for confirmation with that
-                  count; only once confirmed does the slower real scan run - checking each
-                  directory for a cgen.yaml, live progress again - before generating anything.
-
-                fix-prototypes
-                  Scans every CGen-generated module source (.c) file in scope for functions the
-                  user wrote directly inside a usercode region that have no prototype anywhere in
-                  the file (plain user code, not YAML-spec'd module functions - those already get
-                  one). For each file with findings, shows a unified diff (3 lines of context)
-                  of the prototypes it would add to the module.source.prototypes usercode region
-                  at the top of the file, and asks to confirm before writing anything.
-                """);
+        stream.println("CGen - YAML-driven C interface and module generator");
+        stream.println();
+        stream.println("Usage: CGen <command> [options]");
+        stream.println();
+        stream.println("Commands:");
+        for (Command command : COMMANDS) {
+            stream.printf("  %-16s %s%n", command.display(), command.summary());
+        }
+        stream.println();
+        stream.println("Run 'CGen help <command>' or 'CGen <command> --help' for details on a command.");
     }
 }

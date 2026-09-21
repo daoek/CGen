@@ -1,0 +1,168 @@
+.TH CGEN 1 "2026-09-21" "CGen" "CGen Manual"
+.SH NAME
+cgen \- YAML\-driven C interface and module generator for embedded projects
+.SH SYNOPSIS
+.B CGen
+.I command
+.RI [ options ]
+.SH DESCRIPTION
+.B CGen
+generates C headers and sources from short YAML specs: interfaces, modules, state machines,
+observers, command tables, status codes and adapters. Your own code lives in named user regions
+inside the generated files and survives every regeneration.
+.PP
+When no native launcher is installed, substitute
+.B "java \-jar cgen.jar"
+for
+.B CGen
+everywhere below.
+.SH COMMANDS
+.TP
+.BI "init " "[directory] [\-f|\-\-force]"
+Create a new
+.I cgen.yaml
+project file. Without a directory it writes in the current one.
+It refuses to overwrite an existing
+.I cgen.yaml
+unless
+.B \-f
+is given.
+.TP
+.BI "create interface " "name " "[directory]"
+.TP
+.BI "create module " "name " "[directory] [\-\-implements " "name[,name...]" ]
+.TP
+.BI "create state\-machine " "name " "[directory]"
+.TP
+.BI "create observer " "name " "\-\-interface " "name " "[directory] [\-\-capacity " n ]
+.TP
+.BI "create command\-table " "name " "[directory]"
+.TP
+.BI "create status\-codes " "name " "[directory]"
+.TP
+.BI "create adapter " "name " "\-\-from " "interface " "\-\-to " "interface " "[directory]"
+Write a spec file of the given kind into
+.IR directory ,
+creating it when needed. Without a directory it writes in the current one.
+.B create
+writes YAML only; run
+.B "CGen generate"
+to produce the C.
+.TP
+.BI "gen " "[directory] [\-f|\-\-force] [\-v|\-\-verbose] [\-\-also\-nested]"
+.TP
+.BI "generate " "[directory] [\-f|\-\-force] [\-v|\-\-verbose] [\-\-also\-nested]"
+Scan the given directory tree (the current one by default), resolve every spec, and write the
+headers and sources. Idempotent: running it twice produces identical files the second time.
+.B gen
+is an alias for
+.BR generate .
+.TP
+.BI "rename module " "old\-name new\-name"
+Rename a module: its spec file and its generated header and source are moved, references are
+updated, and the project is regenerated in the same run.
+.TP
+.BI "fix\-prototypes " "[directory]"
+Scan every CGen\-generated module source
+.RI ( .c )
+file in scope for functions written directly inside a usercode region that have no prototype
+anywhere in the file. For each file with findings, print a unified diff of the prototype(s) it
+would add to the
+.I module.source.prototypes
+usercode region, and ask for confirmation before writing anything.
+.TP
+.B detach
+.B "DESTRUCTIVE."
+Permanently remove CGen from the project: keeps generated C code and unrelated YAML, removes the
+CGen marker lines, then deletes
+.IR cgen.yaml ,
+every
+.I *.interface.yaml
+and
+.IR *.module.yaml ,
+and the custom documentation YAML the project referenced. Asks for the project name to confirm.
+.SH OPTIONS
+.TP
+.B \-f ", " \-\-force
+.B init :
+overwrite an existing
+.I cgen.yaml
+instead of refusing.
+.br
+.B generate :
+overwrite files on disk that aren't CGen\-generated instead of refusing.
+.TP
+.B \-v ", " \-\-verbose
+.B generate :
+print the project root, scope, and for every output file which spec produced it, whether it's
+new or was regenerated, and how many user regions were carried over \- instead of the progress
+bar.
+.TP
+.B \-\-also\-nested
+.B generate :
+also generate every nested project found under the scanned directory (any subdirectory with its
+own
+.IR cgen.yaml ,
+normally left alone), each using its own
+.I cgen.yaml
+settings. Asks for confirmation after a fast directory count.
+.TP
+.BI "\-\-implements " "name[,name...]"
+.B "create module" :
+interfaces the module implements.
+.TP
+.BI "\-\-interface " "name"
+.B "create observer" :
+the listener interface. Required.
+.TP
+.BI "\-\-capacity " "n"
+.B "create observer" :
+maximum subscribers.
+.TP
+.BI "\-\-from " "interface"
+.B "create adapter" :
+the interface it exposes. Required.
+.TP
+.BI "\-\-to " "interface"
+.B "create adapter" :
+the interface it calls into. Required.
+.TP
+.BI "\-\-dir " "directory"
+.B create :
+the target directory, as an explicit flag instead of a positional argument.
+.TP
+.B \-h ", " \-\-help
+Print help. Given after a command
+.RI ( "CGen <command> \-\-help" )
+it prints that command's usage; given alone it lists all commands.
+.TP
+.BI "help " "[command]"
+Same as
+.BR \-\-help ,
+also accepted as the first argument:
+.B "CGen help"
+lists commands,
+.B "CGen help <command>"
+prints that command's usage.
+.SH EXIT STATUS
+.TP
+.B 0
+Success.
+.TP
+.B 1
+A
+.B "CGen error"
+was printed \- an invalid spec, a missing reference, a refused overwrite, an unreadable file \-
+or a confirmation prompt was declined
+.RI ( detach ", " "\-\-also\-nested" ).
+.SH FILES
+.TP
+.I cgen.yaml
+Project configuration, created by
+.BR "CGen init" .
+.TP
+.I *.interface.yaml ", " *.module.yaml
+Specs created by
+.BR "CGen create" .
+.SH SEE ALSO
+Full documentation: https://daoek.github.io/CGen/

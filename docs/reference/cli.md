@@ -8,22 +8,34 @@ CGen --help
 ```
 
 ```title="Usage"
-CGen init [directory] [-f|--force]
-CGen create interface <name> [directory]
-CGen create module <name> [directory] [--implements <interface>[,<interface>...]]
-CGen create state-machine <name> [directory]
-CGen create observer <name> --interface <interface> [directory] [--capacity <n>]
-CGen create command-table <name> [directory]
-CGen create status-codes <name> [directory]
-CGen create adapter <name> --from <interface> --to <interface> [directory]
-CGen gen | generate [directory] [-f|--force] [-v|--verbose] [--also-nested]
-CGen rename module <old-name> <new-name>
-CGen fix-prototypes [directory]
-CGen detach
+CGen - YAML-driven C interface and module generator
+
+Usage: CGen <command> [options]
+
+Commands:
+  init             Create a new cgen.yaml project
+  create           Scaffold a new interface, module, or other spec
+  gen, generate    Generate C source from YAML specs
+  rename           Rename a module and update every reference to it
+  fix-prototypes   Add missing prototypes for hand-written functions
+  detach           Remove CGen tags and generated-file tracking (destructive)
+
+Run 'CGen help <command>' or 'CGen <command> --help' for details on a command.
 ```
 
-`help`, `--help` and `-h` all print this. Errors print a red `CGen error` block, usually followed by
-a cyan hint explaining how to fix the spec.
+`CGen`, `CGen help` and `CGen --help`/`-h` all print the command list above, with no flag detail.
+For a given command, either `CGen <command> --help`/`-h` or `CGen help <command>` prints that
+command's full usage and flags — the sections below. Errors print a red `CGen error` block, usually
+followed by a cyan hint explaining how to fix the spec.
+
+The same reference is also shipped as a Unix `man` page, [`man/man1/cgen.1`](https://github.com/daoek/CGen/blob/main/man/man1/cgen.1)
+in the repository. On a system with `man`, view it directly or install it:
+
+```console
+man ./man/man1/cgen.1
+# or, to make `man cgen` work from anywhere:
+mkdir -p ~/.local/share/man/man1 && cp man/man1/cgen.1 ~/.local/share/man/man1/ && mandb
+```
 
 ---
 
