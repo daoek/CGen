@@ -215,6 +215,212 @@ int main(void)
 | `transition.<from>.<event>.action` | Between exit hook and state assignment |
 | `event.<EVENT>.unhandled` | When no transition fired |
 
+## The statesmith engine
+
+The builtin engine above is flat: one state, one level. For **hierarchical** states - a composite
+state with its own sub-states, where a parent transition covers every child - CGen can drive
+[StateSmith](https://github.com/StateSmith/StateSmith) (Apache-2.0) instead of implementing a
+state-machine compiler itself. Choose it when a state naturally decomposes into modes with shared
+behaviour (an `OPERATING` mode with `OPENING`/`OPEN`/`CLOSING` sub-states that all react the same
+way to a fault, say); stay with the builtin engine for anything flat - it has no external tool to
+install and no extra generated files.
+
+### File ownership
+
+```
+door.state-machine.yaml   you author this - the single source of truth
+door.h  door.c            CGen-owned public API (same shape as the builtin engine's, minus go_to_state)
+door_hooks.h  door_hooks.c CGen-owned - every line of your code lives here, in usercode regions
+door_sm/                  entirely StateSmith's - never hand-edited
+  door_sm.plantuml          CGen-generated input (kept by `detach`, as documentation)
+  door_sm.h  door_sm.c       StateSmith-generated state-machine logic
+  door_sm.sim.html           StateSmith's browser simulator for this diagram
+```
+
+`generate` writes the CGen-owned files, then runs `ss.cli` on the `.plantuml` it just wrote.
+`ss.cli` never runs, and is never required, in a project with no `engine: statesmith` machine.
+
+### Install and version pinning
+
+Install StateSmith's CLI (`ss.cli`) yourself - CGen never downloads or bundles it - then pin the
+version in `cgen.yaml`:
+
+```yaml title="cgen.yaml"
+stateSmith:
+  command: ss.cli  # or a full path
+  version: 0.22.2  # generate fails with a clear message on a mismatch
+```
+
+See [Project configuration](../guide/project-configuration.md#statesmith) for both keys, and
+StateSmith's own [CLI install guide](https://github.com/StateSmith/StateSmith/wiki/CLI:-download-or-install).
+
+### Spec
+
+```yaml title="door.state-machine.yaml"
+kind: state-machine
+engine: statesmith
+name: door
+description: Door controller
+header: door.h
+source: door.c
+includes: []
+context:
+  - uint32_t open_count
+
+initial: CLOSED
+
+states:
+  - { name: CLOSED }
+  - { name: LOCKED }
+  - { name: FAULT }
+  - name: OPERATING              # composite state
+    initial: OPENING              # required - OPERATING is a transition target below
+    states:
+      - { name: OPENING }
+      - { name: OPEN }
+      - { name: CLOSING }
+
+events:
+  - { name: OPEN_REQUEST, parameters: [] }
+  - { name: CLOSE_REQUEST }
+  - { name: END_STOP }
+  - { name: MOTOR_FAULT, parameters: [uint32_t code] }
+
+transitions:
+  - { from: CLOSED, event: OPEN_REQUEST, to: OPENING, guard: true }
+  - { from: OPERATING, event: MOTOR_FAULT, to: FAULT }   # covers every OPERATING child
+  - { from: OPENING, event: END_STOP, to: OPEN }
+  - { from: OPEN, event: tick, to: CLOSING, guard: true } # polled transition - see below
+```
+
+`states` nests to any depth: an item with its own `states:` is a composite. `initial` is required
+on a composite exactly when something enters it directly - the machine's own `initial`, or a
+transition's `to` - naming one of that composite's *direct* children (nested composites resolve
+their own initial the same way, recursively). A transition's `from` may name a composite too: it
+then applies to every one of its children, StateSmith's native behaviour - no CGen-specific syntax
+needed.
+
+State and event names must be unique across the *whole* hierarchy, same as `(from, event)` pairs
+across the whole machine.
+
+### `event: tick` — the polled transition
+
+There is no `go_to_state()` with this engine (see below), so a conditional move that isn't a
+reaction to a declared event - a polled condition checked every main-loop tick - is written as an
+ordinary transition whose `event` is the reserved word `tick`, almost always paired with a guard:
+
+```yaml
+- { from: OPEN, event: tick, to: CLOSING, guard: true }
+```
+
+This maps to StateSmith's `do` event. `tick` is reserved: declaring a real event literally named
+`tick` under `events:` is a configuration error.
+
+### Generated API
+
+Same shape as the builtin engine's, so callers don't need to know which engine generated a given
+machine:
+
+```c title="door.h (excerpt)"
+typedef enum
+{
+    DOOR_STATE_CLOSED,
+    DOOR_STATE_LOCKED,
+    DOOR_STATE_FAULT,
+    DOOR_STATE_OPENING,
+    DOOR_STATE_OPEN,
+    DOOR_STATE_CLOSING
+} door_state_t;   // leaf states only - OPERATING itself never appears here
+
+void door_init(door_context_t *context);
+void door_tick(door_context_t *context);           // dispatches the do event
+door_state_t door_get_state(const door_context_t *context);
+void door_on_OPEN_REQUEST(door_context_t *context);
+void door_on_MOTOR_FAULT(door_context_t *context, uint32_t code);
+```
+
+`door_state_t` lists leaf states only - a composite is never itself the "current state" StateSmith
+reports, so it stays out of the public enum, exactly like the builtin engine's flat enum. Composite
+names are still used for the composite's own entry/exit/tick hooks (below) and for PlantUML
+structure.
+
+### The parameter-passing model
+
+StateSmith's events carry no data, so an event with `parameters` stores them on the context
+*before* dispatching, and every hook reads them back from there:
+
+```c title="door.c"
+void door_on_MOTOR_FAULT(door_context_t *context, uint32_t code)
+{
+    if (context != NULL)
+    {
+        context->event_args.MOTOR_FAULT.code = code;
+        door_sm_dispatch_event(&context->sm, door_sm_EventId_MOTOR_FAULT);
+    }
+}
+```
+
+```c title="door_hooks.c"
+void door_hook_transition_OPERATING_MOTOR_FAULT_action(door_context_t *context)
+{
+    /*@CGen usercode+ transition.OPERATING.MOTOR_FAULT.action*/
+    log_fault_code(context->event_args.MOTOR_FAULT.code);
+    /*@CGen usercode-*/
+}
+```
+
+### Hooks - where your code lives
+
+One function per state (leaf **and** composite) for `entry`/`exit`/`tick`, plus one per transition
+for `guard`/`action` - all in `door_hooks.h/.c`, all non-`static` (StateSmith's generated
+`door_sm.c` calls them from a separate translation unit):
+
+| Region | Runs |
+| --- | --- |
+| `state.<STATE>.entry` | On every entry into the state (leaf or composite) |
+| `state.<STATE>.exit` | On every exit from the state |
+| `state.<STATE>.tick` | On every `do` dispatch while the state is active |
+| `transition.<from>.<event>.guard` | Before the transition, to set `cgen_guard` |
+| `transition.<from>.<event>.action` | Between the exit hook and the state assignment |
+
+**Region names are identical to the builtin engine's.** Switching an existing state machine from
+`engine: builtin` to `engine: statesmith` (same state names) keeps every user region: CGen carries
+region content across regeneration by name, regardless of which engine wrote the file it came from.
+
+### No `go_to_state()`
+
+Arbitrary jumps bypass StateSmith's hierarchical entry/exit semantics (which parent do you exit
+through?), so this engine does not generate one. Express a conditional move as an
+[`event: tick`](#event-tick-the-polled-transition) transition with a guard instead.
+
+### Using it
+
+```c title="main.c"
+#include "door.h"
+
+static door_context_t door;
+
+int main(void)
+{
+    door_init(&door);
+
+    for (;;)
+    {
+        if (button_pressed())
+        {
+            door_on_OPEN_REQUEST(&door);
+        }
+        door_tick(&door);
+    }
+}
+```
+
+### MISRA
+
+StateSmith-generated code (`door_sm.h/.c`) is outside CGen's [MISRA](../guide/misra.md) claims -
+it comes from a separate tool with its own coding style, and needs its own review and deviations
+if your project requires one.
+
 ## See also
 
 - [Command table](command-table.md) — dispatch on an opcode rather than on a state.

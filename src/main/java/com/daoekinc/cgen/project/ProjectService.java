@@ -283,10 +283,23 @@ public final class ProjectService {
     }
 
     public Path createStateMachine(ProjectConfig project, String requestedName, Path requestedDirectory) {
+        return createStateMachine(project, requestedName, requestedDirectory, "builtin");
+    }
+
+    public Path createStateMachine(ProjectConfig project, String requestedName, Path requestedDirectory, String engine) {
         String name = identifier(requestedName, "state machine name");
+        if (!engine.equals("builtin") && !engine.equals("statesmith")) {
+            throw new CGenException("--engine must be builtin or statesmith, got '" + engine + "'");
+        }
         Path directory = safeDirectory(project, requestedDirectory);
         Path spec = directory.resolve(name + ".state-machine.yaml");
-        String content = """
+        String content = engine.equals("statesmith") ? statesmithStateMachineTemplate(name) : builtinStateMachineTemplate(name);
+        writeNew(spec, content);
+        return spec;
+    }
+
+    private static String builtinStateMachineTemplate(String name) {
+        return """
                 kind: state-machine
                 name: %s
                 description: %s state machine
@@ -317,8 +330,52 @@ public final class ProjectService {
                   - { from: IDLE, event: START, to: RUNNING, guard: false }
                   # - { from: IDLE, event: START, to: RUNNING, guard: false, description: Start the run }
                 """.formatted(name, name, name, name, name);
-        writeNew(spec, content);
-        return spec;
+    }
+
+    private static String statesmithStateMachineTemplate(String name) {
+        return """
+                # Requires a `stateSmith:` block in cgen.yaml, e.g.:
+                #   stateSmith:
+                #     command: ss.cli
+                #     version: 0.22.2
+                kind: state-machine
+                engine: statesmith
+                name: %s
+                description: %s state machine
+                header: %s.h
+                source: %s.c
+
+                includes: []
+
+                # Members stored in %s_context_t alongside the StateSmith instance.
+                context: []
+
+                initial: IDLE
+
+                states:
+                  - { name: IDLE, description: Waiting to start }
+                  - name: RUNNING           # composite state - nest its own sub-states
+                    initial: RUN_STEADY      # required: RUNNING is a transition target below
+                    states:
+                      - { name: RUN_STEADY, description: Normal operation }
+                      - { name: RUN_FAULT, description: Fault detected while running }
+
+                events:
+                  - name: START
+                    description: Begin running
+                    parameters: []
+                    # parameters:
+                    #   - uint32_t speed
+                  - { name: FAULT, description: A fault occurred }
+
+                # guard: true adds a transition.<from>.<event>.guard user region that sets
+                # cgen_guard = false to block the transition at runtime. event: tick is reserved
+                # for a polled transition (StateSmith's do event) instead of a declared event.
+                transitions:
+                  - { from: IDLE, event: START, to: RUNNING, guard: false }
+                  - { from: RUNNING, event: FAULT, to: RUN_FAULT, guard: false } # covers every RUNNING child
+                  - { from: RUN_STEADY, event: tick, to: RUN_STEADY, guard: true } # polled condition, no-op target
+                """.formatted(name, name, name, name, name);
     }
 
     public Path createObserver(ProjectConfig project, String requestedName, String requestedInterface, int capacity, Path requestedDirectory) {

@@ -75,7 +75,7 @@ carried over.
 | --- | --- |
 | [Interface](https://daoek.github.io/CGen/generators/interface/) | A contract several modules implement, with guarded dispatch |
 | [Module](https://daoek.github.io/CGen/generators/module/) | A concrete unit: state, variables, functions, implementations |
-| [State machine](https://daoek.github.io/CGen/generators/state-machine/) | States, events, transitions, guards, tick hooks |
+| [State machine](https://daoek.github.io/CGen/generators/state-machine/) | States, events, transitions, guards, tick hooks — optionally hierarchical, via StateSmith |
 | [Observer](https://daoek.github.io/CGen/generators/observer/) | Fan one call out to many subscribers, no allocation |
 | [Command table](https://daoek.github.io/CGen/generators/command-table/) | UART/CLI opcode dispatch |
 | [Status codes](https://daoek.github.io/CGen/generators/status-codes/) | A shared status enum plus checking macros |

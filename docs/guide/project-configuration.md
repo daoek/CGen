@@ -18,6 +18,12 @@ format:
   publicVariables: extern # extern or accessors
   suppressUnusedWarnings: true # emit (void)param; lines in generated stubs
   functionNaming: snake_case # snake_case or camelCase
+
+# Only needed by a state machine with engine: statesmith - see
+# State machine > The statesmith engine.
+stateSmith:
+  command: ss.cli
+  version: 0.22.2
 ```
 
 Create it with [`CGen init`](../reference/cli.md#cgen-init). Its location defines the project:
@@ -141,6 +147,16 @@ you have not filled in yet.
 This is a project-wide switch, so a project stays internally consistent. Changing it renames every
 generated function on the next `generate`; call sites in your own user regions are **not** rewritten,
 so update those in the same commit.
+
+## `stateSmith`
+
+Only required when the project has at least one [`engine: statesmith`](../generators/state-machine.md#the-statesmith-engine)
+state machine; `generate` never invokes or requires `ss.cli` otherwise.
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `command` | `ss.cli` | Executable name or path. Resolved on PATH; a bare name also tries `<name>.exe`, since that's how StateSmith's own installer names it on Windows. |
+| `version` | none, required if used | Exact version `ss.cli --version` must report. `generate` fails with install/version instructions on a missing tool or a mismatch. |
 
 ## `schema`, `name`, `version`
 

@@ -31,7 +31,8 @@ scaffolded by [`CGen create`](../reference/cli.md#cgen-create) and produced by t
     ---
 
     States, events, transitions and guards, with entry/exit/tick hooks and a `_tick()` for your
-    main loop.
+    main loop. `engine: statesmith` adds hierarchical (composite) states via
+    [StateSmith](state-machine.md#the-statesmith-engine).
 
     *Use when behaviour depends on what happened before.*
 
@@ -77,7 +78,7 @@ scaffolded by [`CGen create`](../reference/cli.md#cgen-create) and produced by t
 | --- | --- | --- | --- | --- |
 | `interface` | `CGen create interface <name> [dir]` | header | — | 3 |
 | `module` | `CGen create module <name> [dir] --implements <i>` | header + source | interfaces | one per function, plus file-level |
-| `state-machine` | `CGen create state-machine <name> [dir]` | header + source | — | per state, transition and event |
+| `state-machine` | `CGen create state-machine <name> [dir] [--engine statesmith]` | header + source (+ `_hooks.h/.c` and `_sm/` with `engine: statesmith`) | — | per state, transition and event |
 | `observer` | `CGen create observer <name> --interface <i> [dir]` | header + source | one interface | none |
 | `command-table` | `CGen create command-table <name> [dir]` | header + source | — | one per command, plus `command.unknown` |
 | `status-codes` | `CGen create status-codes <name> [dir]` | header | — | none |

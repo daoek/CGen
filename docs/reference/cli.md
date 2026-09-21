@@ -67,7 +67,7 @@ writes in the current one. The scaffold arrives pre-filled with commented exampl
 | --- | --- |
 | [Interface](../generators/interface.md) | `CGen create interface common_iic drivers/Interface` |
 | [Module](../generators/module.md) | `CGen create module ra_iic drivers/RA --implements common_iic` |
-| [State machine](../generators/state-machine.md) | `CGen create state-machine door` |
+| [State machine](../generators/state-machine.md) | `CGen create state-machine door [--engine builtin\|statesmith]` |
 | [Observer](../generators/observer.md) | `CGen create observer button_events --interface button_listener --capacity 8` |
 | [Command table](../generators/command-table.md) | `CGen create command-table uart_cmd` |
 | [Status codes](../generators/status-codes.md) | `CGen create status-codes cgen_status` |
@@ -225,8 +225,14 @@ CGen detach
 ```
 
 **Permanently** removes CGen from the project. It keeps all generated C code and unrelated YAML,
-removes the CGen marker lines, then deletes `cgen.yaml`, every `*.interface.yaml` and
-`*.module.yaml`, and the custom documentation YAML the project referenced.
+removes the CGen marker lines, then deletes `cgen.yaml` and every CGen spec YAML
+(`*.interface.yaml`, `*.module.yaml`, `*.state-machine.yaml`, `*.status-codes.yaml`,
+`*.observer.yaml`, `*.command-table.yaml`, `*.adapter.yaml`), and the custom documentation YAML the
+project referenced.
+
+For an [`engine: statesmith`](../generators/state-machine.md#the-statesmith-engine) state machine,
+the generated `.plantuml` is kept - only its CGen marker is stripped, as documentation - it is not
+deleted like the YAML specs above.
 
 ```console
 DESTRUCTIVE: detach CGen from this project

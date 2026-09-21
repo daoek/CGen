@@ -4,7 +4,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public final class CGenTag {
-    private static final Pattern MARKER = Pattern.compile("^\\s*/\\*@CGen\\(([^)]*)\\)\\*/\\s*$");
+    // The optional leading "'" tolerates a PlantUML line comment (StateSmith diagrams - PlantUML
+    // has no /* */ syntax) wrapping the same marker; no C output ever starts a line with "'", so
+    // this is additive and changes nothing for any other generated file.
+    private static final Pattern MARKER = Pattern.compile("^\\s*(?:'\\s*)?/\\*@CGen\\(([^)]*)\\)\\*/\\s*$");
     private static final Pattern USER_BEGIN = Pattern.compile("^\\s*/\\*@CGen usercode\\+ (\\S+)\\*/\\s*$");
     private static final Pattern USER_END = Pattern.compile("^\\s*/\\*@CGen usercode-\\*/\\s*$");
 

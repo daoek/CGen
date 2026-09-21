@@ -151,8 +151,27 @@ public final class CGenCli {
             return 0;
         }
         if (args[1].equals("state-machine")) {
-            Path directory = parseSimpleDirectory(args, "Usage: CGen create state-machine <name> [directory]");
-            out.println("Created " + projects.createStateMachine(project, args[2], directory));
+            String engine = "builtin";
+            Path directory = workingDirectory;
+            boolean directorySpecified = false;
+            int index = 3;
+            while (index < args.length) {
+                if (args[index].equals("--engine") && index + 1 < args.length) {
+                    engine = args[index + 1];
+                    index += 2;
+                } else if (args[index].equals("--dir") && index + 1 < args.length && !directorySpecified) {
+                    directory = resolveDirectory(args[index + 1]);
+                    directorySpecified = true;
+                    index += 2;
+                } else if (!args[index].startsWith("--") && !directorySpecified) {
+                    directory = resolveDirectory(args[index]);
+                    directorySpecified = true;
+                    index++;
+                } else {
+                    throw new CGenException("Usage: CGen create state-machine <name> [directory] [--engine builtin|statesmith]");
+                }
+            }
+            out.println("Created " + projects.createStateMachine(project, args[2], directory, engine));
             return 0;
         }
         if (args[1].equals("command-table")) {
@@ -578,7 +597,7 @@ public final class CGenCli {
                             Usage:
                               CGen create interface <name> [directory]
                               CGen create module <name> [directory] [--implements <interface>[,<interface>...]]
-                              CGen create state-machine <name> [directory]
+                              CGen create state-machine <name> [directory] [--engine builtin|statesmith]
                               CGen create observer <name> --interface <interface> [directory] [--capacity <n>]
                               CGen create command-table <name> [directory]
                               CGen create status-codes <name> [directory]
@@ -589,6 +608,8 @@ public final class CGenCli {
                             `CGen generate` to produce the C.
 
                             --implements <name>[,<name>...]   module: interfaces the module implements.
+                            --engine builtin|statesmith         state-machine: builtin (default) or
+                                                                StateSmith-backed hierarchical states.
                             --interface <name>                 observer: the listener interface. Required.
                             --capacity <n>                     observer: maximum subscribers.
                             --from <interface>                 adapter: the interface it exposes. Required.
@@ -646,9 +667,13 @@ public final class CGenCli {
 
                             DESTRUCTIVE: permanently removes CGen from the project. Keeps generated C
                             code and unrelated YAML; removes the CGen marker lines, then deletes
-                            cgen.yaml, every *.interface.yaml and *.module.yaml, and the custom
-                            documentation YAML the project referenced. Asks for the project name to
-                            confirm.
+                            cgen.yaml and every CGen spec YAML (*.interface.yaml, *.module.yaml,
+                            *.state-machine.yaml, *.status-codes.yaml, *.observer.yaml,
+                            *.command-table.yaml, *.adapter.yaml), and the custom documentation YAML
+                            the project referenced. Asks for the project name to confirm.
+
+                            For an `engine: statesmith` state machine, the generated .plantuml is kept
+                            (only its CGen marker is stripped, as documentation) - it is not deleted.
                             """));
 
     private static boolean hasHelpFlag(String[] args) {

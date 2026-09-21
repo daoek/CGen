@@ -11,6 +11,8 @@ import com.daoekinc.cgen.model.ProjectConfig;
 import com.daoekinc.cgen.model.StateMachineSpec;
 import com.daoekinc.cgen.model.StatusCodesSpec;
 import com.daoekinc.cgen.project.ProjectService;
+import com.daoekinc.cgen.statesmith.StateSmithRunner;
+import com.daoekinc.cgen.tag.CGenTag;
 import com.daoekinc.cgen.tag.SwitchTagProcessor;
 import com.daoekinc.cgen.tag.TagHelper;
 import com.daoekinc.cgen.tag.TagHelper.UserRegions;
@@ -48,6 +50,10 @@ public final class CGenerator {
     private final InterfaceRenderer interfaceRenderer = new InterfaceRenderer();
     private final ModuleRenderer moduleRenderer = new ModuleRenderer();
     private final StateMachineRenderer stateMachineRenderer = new StateMachineRenderer();
+    private final StateSmithPlantUmlRenderer stateSmithPlantUmlRenderer = new StateSmithPlantUmlRenderer();
+    private final StateSmithHooksRenderer stateSmithHooksRenderer = new StateSmithHooksRenderer();
+    private final StateSmithApiRenderer stateSmithApiRenderer = new StateSmithApiRenderer();
+    private final StateSmithRunner stateSmithRunner = new StateSmithRunner();
     private final ObserverRenderer observerRenderer = new ObserverRenderer();
     private final CommandTableRenderer commandTableRenderer = new CommandTableRenderer();
     private final StatusCodesRenderer statusCodesRenderer = new StatusCodesRenderer();
@@ -119,6 +125,7 @@ public final class CGenerator {
             outputs.add(new Output(module.source(), source, moduleRenderer.renderSource(project, module, plan.interfaces(), documentation, sourceRegions),
                     sourceExisted, sourceRegions.regionCount()));
         }
+        List<StatesmithRun> statesmithRuns = new ArrayList<>();
         for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
             StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
             Path header = machine.source().getParent().resolve(machine.header());
@@ -129,10 +136,39 @@ public final class CGenerator {
             boolean sourceExisted = Files.exists(source);
             UserRegions headerRegions = tags.readForGeneration(header, force);
             UserRegions sourceRegions = tags.readForGeneration(source, force);
-            outputs.add(new Output(machine.source(), header, stateMachineRenderer.renderHeader(project, machine, documentation, headerRegions),
-                    headerExisted, headerRegions.regionCount()));
-            outputs.add(new Output(machine.source(), source, stateMachineRenderer.renderSource(project, machine, documentation, sourceRegions),
-                    sourceExisted, sourceRegions.regionCount()));
+            if (machine.engine() == StateMachineSpec.Engine.BUILTIN) {
+                outputs.add(new Output(machine.source(), header, stateMachineRenderer.renderHeader(project, machine, documentation, headerRegions),
+                        headerExisted, headerRegions.regionCount()));
+                outputs.add(new Output(machine.source(), source, stateMachineRenderer.renderSource(project, machine, documentation, sourceRegions),
+                        sourceExisted, sourceRegions.regionCount()));
+            } else {
+                Path directory = machine.source().getParent();
+                Path hooksHeader = directory.resolve(StateSmithNaming.hooksHeaderFileName(machine.name()));
+                Path hooksSource = directory.resolve(StateSmithNaming.hooksSourceFileName(machine.name()));
+                Path smDirectory = directory.resolve(StateSmithNaming.smDirectoryName(machine.name()));
+                Path plantuml = smDirectory.resolve(StateSmithNaming.plantUmlFileName(machine.name()));
+                Path smHeader = smDirectory.resolve(StateSmithNaming.smHeaderFileName(machine.name()));
+                Path smSource = smDirectory.resolve(StateSmithNaming.smSourceFileName(machine.name()));
+                requireUniqueDestination(destinations, hooksHeader.toAbsolutePath().normalize());
+                requireUniqueDestination(destinations, hooksSource.toAbsolutePath().normalize());
+                requireUniqueDestination(destinations, plantuml.toAbsolutePath().normalize());
+
+                UserRegions hooksHeaderRegions = tags.readForGeneration(hooksHeader, force);
+                UserRegions hooksSourceRegions = tags.readForGeneration(hooksSource, force);
+                UserRegions plantumlRegions = tags.readForGeneration(plantuml, force);
+
+                outputs.add(new Output(machine.source(), plantuml, stateSmithPlantUmlRenderer.render(project, machine),
+                        Files.exists(plantuml), plantumlRegions.regionCount()));
+                outputs.add(new Output(machine.source(), hooksHeader, stateSmithHooksRenderer.renderHeader(project, machine, documentation, hooksHeaderRegions),
+                        Files.exists(hooksHeader), hooksHeaderRegions.regionCount()));
+                outputs.add(new Output(machine.source(), hooksSource, stateSmithHooksRenderer.renderSource(project, machine, documentation, hooksSourceRegions),
+                        Files.exists(hooksSource), hooksSourceRegions.regionCount()));
+                outputs.add(new Output(machine.source(), header, stateSmithApiRenderer.renderHeader(project, machine, documentation, headerRegions),
+                        headerExisted, headerRegions.regionCount()));
+                outputs.add(new Output(machine.source(), source, stateSmithApiRenderer.renderSource(project, machine, documentation, sourceRegions),
+                        sourceExisted, sourceRegions.regionCount()));
+                statesmithRuns.add(new StatesmithRun(machine.source(), plantuml, smHeader, smSource));
+            }
         }
         for (Path path : specificationFiles(scope, ".status-codes.yaml", project)) {
             StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));
@@ -214,7 +250,37 @@ public final class CGenerator {
             completed[0]++;
             progress.onFileGenerated(completed[0], total, output.specSource(), output.path(), output.existed(), output.regionsCarried());
         }
-        return outputs.stream().map(Output::path).toList();
+
+        List<Path> generatedFiles = new ArrayList<>(outputs.stream().map(Output::path).toList());
+        if (!statesmithRuns.isEmpty()) {
+            stateSmithRunner.checkVersion(project);
+            for (StatesmithRun run : statesmithRuns) {
+                stateSmithRunner.run(run.plantuml(), run.yamlSource(), project);
+                if (!hasGeneratedMarker(run.smHeader()) || !hasGeneratedMarker(run.smSource())) {
+                    throw new CGenException("StateSmith did not produce " + run.smHeader() + " and " + run.smSource()
+                            + " with CGen's file marker for " + run.yamlSource()
+                            + " - check the generated .plantuml's $CONFIG [RenderConfig] FileTop setting");
+                }
+                generatedFiles.add(run.smHeader());
+                generatedFiles.add(run.smSource());
+            }
+        }
+        return List.copyOf(generatedFiles);
+    }
+
+    private static boolean hasGeneratedMarker(Path file) {
+        if (!Files.isRegularFile(file)) {
+            return false;
+        }
+        try {
+            return Files.readString(file).lines().anyMatch(CGenTag::isGeneratedFile);
+        } catch (IOException exception) {
+            return false;
+        }
+    }
+
+    /** One {@code ss.cli} invocation to make after every CGen-written file is on disk. */
+    private record StatesmithRun(Path yamlSource, Path plantuml, Path smHeader, Path smSource) {
     }
 
     @FunctionalInterface
@@ -413,7 +479,18 @@ public final class CGenerator {
         }
         for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
             StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
-            cleanOutputs(path.getParent(), List.of(machine.header(), machine.sourceFile()), cleaned);
+            if (machine.engine() == StateMachineSpec.Engine.BUILTIN) {
+                cleanOutputs(path.getParent(), List.of(machine.header(), machine.sourceFile()), cleaned);
+            } else {
+                String smDirectory = StateSmithNaming.smDirectoryName(machine.name());
+                cleanOutputs(path.getParent(), List.of(
+                        machine.header(), machine.sourceFile(),
+                        StateSmithNaming.hooksHeaderFileName(machine.name()), StateSmithNaming.hooksSourceFileName(machine.name()),
+                        smDirectory + "/" + StateSmithNaming.plantUmlFileName(machine.name()),
+                        smDirectory + "/" + StateSmithNaming.smHeaderFileName(machine.name()),
+                        smDirectory + "/" + StateSmithNaming.smSourceFileName(machine.name())),
+                        cleaned);
+            }
         }
         for (Path path : specificationFiles(scope, ".status-codes.yaml", project)) {
             StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));

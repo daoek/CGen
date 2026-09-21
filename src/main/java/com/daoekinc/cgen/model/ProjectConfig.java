@@ -14,14 +14,24 @@ public record ProjectConfig(
         String lineEnding,
         String publicVariableStyle,
         boolean suppressUnusedWarnings,
-        boolean camelCaseFunctions) {
+        boolean camelCaseFunctions,
+        StateSmithSettings stateSmith) {
 
     public record Documentation(String style, Path customFile) {
     }
 
+    /**
+     * {@code stateSmith:} project settings, only needed by {@code engine: statesmith} state
+     * machines. {@code command} defaults to {@code ss.cli} when the whole block is omitted;
+     * {@code version} has no default and is only required (checked at generate time, not here)
+     * when the project actually contains a statesmith-engine machine.
+     */
+    public record StateSmithSettings(String command, String version) {
+    }
+
     public static ProjectConfig from(Path file, Map<String, Object> yaml) {
         String context = file.toString();
-        Values.onlyKeys(yaml, context, "schema", "name", "version", "documentation", "format");
+        Values.onlyKeys(yaml, context, "schema", "name", "version", "documentation", "format", "stateSmith");
         int schema = Values.optionalInt(yaml, "schema", 1, context);
         if (schema != 1) {
             throw new CGenException(context + " uses unsupported schema " + schema);
@@ -79,9 +89,15 @@ public record ProjectConfig(
         }
         boolean camelCaseFunctions = functionNaming.equals("camelCase");
 
+        Map<String, Object> stateSmithMap = Values.optionalMap(yaml, "stateSmith", context);
+        Values.onlyKeys(stateSmithMap, context + ".stateSmith", "command", "version");
+        String stateSmithCommand = Values.optionalString(stateSmithMap, "command", "ss.cli", context + ".stateSmith");
+        String stateSmithVersion = Values.optionalString(stateSmithMap, "version", null, context + ".stateSmith");
+        StateSmithSettings stateSmith = new StateSmithSettings(stateSmithCommand, stateSmithVersion);
+
         return new ProjectConfig(root, name, version,
                 new Documentation(style, customFile), indent, lineEnding, publicVariableStyle, suppressUnusedWarnings,
-                camelCaseFunctions);
+                camelCaseFunctions, stateSmith);
     }
 
     private static Path resolveInside(Path root, String configured, String label) {

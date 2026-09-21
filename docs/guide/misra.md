@@ -96,6 +96,15 @@ deviation**, once, for the generated dispatch pattern.
 It is the only deviation inherent to the generated structure. Everything else a checker flags is
 either in your user regions or in the types you chose.
 
+## The StateSmith engine is out of scope
+
+None of the above applies to [`engine: statesmith`](../generators/state-machine.md#the-statesmith-engine)
+state machines' `door_sm.h`/`door_sm.c` - that code comes from StateSmith, a separate tool with its
+own generation style, and needs its own review and deviations if your project requires MISRA
+compliance. CGen's MISRA-oriented claims cover only what CGen itself generates: for a statesmith
+machine, that's `door.h`/`door.c` and `door_hooks.h`/`door_hooks.c`, generated the same
+single-return, null-checked way as everything else on this page.
+
 ## Practical review advice
 
 - **Keep the YAML in review.** Reviewers can read one spec file instead of three generated ones,
