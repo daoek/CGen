@@ -32,7 +32,8 @@ public record InterfaceSpec(
     }
 
     public record Function(String name, String returnType, String description, List<Parameter> parameters,
-                           String invalidReturn, String uninitializedReturn) {
+                           String invalidReturn, String uninitializedReturn,
+                           boolean invalidReturnIsFallback, boolean uninitializedReturnIsFallback) {
     }
 
     /**
@@ -175,17 +176,25 @@ public record InterfaceSpec(
             functionUninitializedReturn = oneLineExpression(functionUninitializedReturn, itemContext + ".uninitializedReturn");
         }
         // No value anywhere: zero-initialize the return type so the generated guard still compiles.
+        // Tracked precisely here, at the moment of the decision, rather than guessed later by
+        // comparing the final value against zeroReturn(returnType) - a function that explicitly
+        // names that same expression as its real sentinel would otherwise look identical to one
+        // that fell back to it.
+        boolean invalidReturnIsFallback = false;
+        boolean uninitializedReturnIsFallback = false;
         if (!returnType.equals("void")) {
             if (functionInvalidReturn == null) {
                 functionInvalidReturn = zeroReturn(returnType);
+                invalidReturnIsFallback = true;
             }
             if (functionUninitializedReturn == null) {
                 functionUninitializedReturn = zeroReturn(returnType);
+                uninitializedReturnIsFallback = true;
             }
         }
         return new Function(functionName, returnType,
                 Values.optionalString(item, "description", functionName, itemContext), List.copyOf(parameters),
-                functionInvalidReturn, functionUninitializedReturn);
+                functionInvalidReturn, functionUninitializedReturn, invalidReturnIsFallback, uninitializedReturnIsFallback);
     }
 
     static List<Field> parseFields(Map<String, Object> map, String key, String context) {

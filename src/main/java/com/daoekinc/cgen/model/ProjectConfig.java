@@ -15,9 +15,16 @@ public record ProjectConfig(
         String publicVariableStyle,
         boolean suppressUnusedWarnings,
         boolean camelCaseFunctions,
-        StateSmithSettings stateSmith) {
+        StateSmithSettings stateSmith,
+        boolean strict) {
 
     public record Documentation(String style, Path customFile) {
+    }
+
+    /** A copy of this project with {@code strict} overridden - for the CLI's {@code --strict} flag. */
+    public ProjectConfig withStrict(boolean strictOverride) {
+        return new ProjectConfig(root, name, version, documentation, indent, lineEnding, publicVariableStyle,
+                suppressUnusedWarnings, camelCaseFunctions, stateSmith, strictOverride);
     }
 
     /**
@@ -31,7 +38,7 @@ public record ProjectConfig(
 
     public static ProjectConfig from(Path file, Map<String, Object> yaml) {
         String context = file.toString();
-        Values.onlyKeys(yaml, context, "schema", "name", "version", "documentation", "format", "stateSmith");
+        Values.onlyKeys(yaml, context, "schema", "name", "version", "documentation", "format", "stateSmith", "strict");
         int schema = Values.optionalInt(yaml, "schema", 1, context);
         if (schema != 1) {
             throw new CGenException(context + " uses unsupported schema " + schema);
@@ -95,9 +102,11 @@ public record ProjectConfig(
         String stateSmithVersion = Values.optionalString(stateSmithMap, "version", null, context + ".stateSmith");
         StateSmithSettings stateSmith = new StateSmithSettings(stateSmithCommand, stateSmithVersion);
 
+        boolean strict = Boolean.parseBoolean(Values.optionalString(yaml, "strict", "false", context));
+
         return new ProjectConfig(root, name, version,
                 new Documentation(style, customFile), indent, lineEnding, publicVariableStyle, suppressUnusedWarnings,
-                camelCaseFunctions, stateSmith);
+                camelCaseFunctions, stateSmith, strict);
     }
 
     private static Path resolveInside(Path root, String configured, String label) {

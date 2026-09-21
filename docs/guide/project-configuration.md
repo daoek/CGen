@@ -24,6 +24,8 @@ format:
 stateSmith:
   command: ss.cli
   version: 0.22.2
+
+strict: false
 ```
 
 Create it with [`CGen init`](../reference/cli.md#cgen-init). Its location defines the project:
@@ -157,6 +159,13 @@ state machine; `generate` never invokes or requires `ss.cli` otherwise.
 | --- | --- | --- |
 | `command` | `ss.cli` | Executable name or path. Resolved on PATH; a bare name also tries `<name>.exe`, since that's how StateSmith's own installer names it on Windows. |
 | `version` | none, required if used | Exact version `ss.cli --version` must report. `generate` fails with install/version instructions on a missing tool or a mismatch. |
+
+## `strict`
+
+Default `false`. When `true`, `generate` fails instead of warning on a non-`void` function that
+has no [`invalidReturn`/`uninitializedReturn`](../generators/interface.md#invalidreturn-and-uninitializedreturn)
+anywhere and falls back to a zero initializer. `CGen generate --strict` does the same for one run
+without changing `cgen.yaml`.
 
 ## `schema`, `name`, `version`
 

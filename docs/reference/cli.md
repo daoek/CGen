@@ -99,7 +99,7 @@ writes in the current one. The scaffold arrives pre-filled with commented exampl
 ## `CGen generate`
 
 ```console
-CGen generate [directory] [-f|--force] [-v|--verbose] [--also-nested]
+CGen generate [directory] [-f|--force] [-v|--verbose] [--also-nested] [--strict]
 CGen gen [directory] ...
 ```
 
@@ -145,6 +145,11 @@ Use it when you want to confirm that your code was picked up, or to find which s
 Also generate every nested project found under the scanned directory, each with its own
 `cgen.yaml`. Asks for confirmation first, after a fast directory count.
 [Full explanation](../guide/nested-projects.md#generating-everything-at-once-also-nested).
+
+### `--strict`
+
+Fails instead of warning when a non-`void` function falls back to a zero-initializer default -
+same as [`strict: true`](../guide/project-configuration.md#strict) in `cgen.yaml`, for one run.
 
 ---
 

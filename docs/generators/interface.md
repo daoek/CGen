@@ -99,6 +99,13 @@ whose `0` value means success, a zero initializer turns a failed guard into a re
 name a real sentinel through `invalidReturns` for those types. Whatever value you name must be
 visible where it is used: declare the enum in `enums`, or pull its header in through `includes`.
 
+!!! warning "Step 4 is not silent"
+
+    `generate` prints a warning for every function that falls all the way through to the zero
+    initializer, naming the spec file, the interface (or module) and the function. Set
+    [`strict: true`](../guide/project-configuration.md#strict) in `cgen.yaml`, or pass
+    `--strict` to one `generate` run, to fail instead of warn.
+
 ### `functions`
 
 ```yaml

@@ -257,6 +257,7 @@ public final class CGenCli {
         boolean force = false;
         boolean verbose = false;
         boolean alsoNested = false;
+        boolean strict = false;
         Path directory = workingDirectory;
         boolean directorySpecified = false;
         for (int index = 1; index < args.length; index++) {
@@ -266,16 +267,21 @@ public final class CGenCli {
                 verbose = true;
             } else if (args[index].equals("--also-nested")) {
                 alsoNested = true;
+            } else if (args[index].equals("--strict")) {
+                strict = true;
             } else if (!directorySpecified) {
                 directory = resolveDirectory(args[index]);
                 directorySpecified = true;
             } else {
-                throw new CGenException("Usage: CGen generate [directory] [-f|--force] [-v|--verbose] [--also-nested]");
+                throw new CGenException("Usage: CGen generate [directory] [-f|--force] [-v|--verbose] [--also-nested] [--strict]");
             }
         }
         ProjectConfig project;
         try {
             project = projects.findAndLoad(workingDirectory);
+            if (strict) {
+                project = project.withStrict(true);
+            }
         } catch (CGenException exception) {
             if (!alsoNested) {
                 throw exception;
@@ -322,6 +328,9 @@ public final class CGenCli {
         if (alsoNested) {
             for (Path nestedProjectFile : scanForNestedProjects(nestedScanRoot, knownDirectoryCount)) {
                 ProjectConfig nestedProject = projects.load(nestedProjectFile);
+                if (strict) {
+                    nestedProject = nestedProject.withStrict(true);
+                }
                 if (verbose) {
                     out.println("Nested project: " + nestedProject.root());
                 }
@@ -624,7 +633,7 @@ public final class CGenCli {
                             """),
             new Command("gen, generate", List.of("gen", "generate"),
                     "Generate C source from YAML specs", """
-                            Usage: CGen gen | generate [directory] [-f|--force] [-v|--verbose] [--also-nested]
+                            Usage: CGen gen | generate [directory] [-f|--force] [-v|--verbose] [--also-nested] [--strict]
 
                             Scans the given directory tree (the current one by default), resolves every
                             spec, and writes the headers and sources. Idempotent: running it twice
@@ -637,6 +646,11 @@ public final class CGenCli {
                               Print the project root, scope, and for every output file which spec
                               produced it, whether it's new or was regenerated, and how many user
                               regions were carried over - instead of the progress bar.
+
+                            --strict
+                              Fail instead of warning when a non-void function has no invalidReturn/
+                              uninitializedReturn anywhere and falls back to a zero initializer. Same
+                              as setting 'strict: true' in cgen.yaml, for one run.
 
                             --also-nested
                               Also generate every nested project found under the scanned directory

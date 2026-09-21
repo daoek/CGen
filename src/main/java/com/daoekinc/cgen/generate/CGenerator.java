@@ -99,6 +99,7 @@ public final class CGenerator {
             }
             modules.add(new ModulePlan(module, List.copyOf(implemented)));
         }
+        reportReturnDefaultFallbacks(project, interfaces.values(), modules, warnings);
 
         // Preflight every destination and render every file before changing the filesystem.
         List<Output> outputs = new ArrayList<>();
@@ -272,6 +273,50 @@ public final class CGenerator {
             }
         }
         return List.copyOf(generatedFiles);
+    }
+
+    /**
+     * A function with no {@code invalidReturn}/{@code uninitializedReturn} anywhere (its own,
+     * {@code invalidReturns} for its type, or the interface/module default) falls back to a zero
+     * initializer - for an enum whose 0 member means success, a failed guard then reports success.
+     * Warns about every such function, or - with {@code strict: true} in cgen.yaml, or the CLI's
+     * {@code --strict} - fails generate on the first one, naming the spec file and function.
+     */
+    private static void reportReturnDefaultFallbacks(ProjectConfig project, Iterable<InterfaceSpec> interfaces,
+                                                      List<ModulePlan> modules, WarningListener warnings) {
+        for (InterfaceSpec spec : interfaces) {
+            for (InterfaceSpec.Function function : spec.functions()) {
+                reportFallbackFunction(project, spec.source(), "interface '" + spec.name() + "'", function, warnings);
+            }
+        }
+        for (ModulePlan plan : modules) {
+            for (ModuleSpec.Function function : plan.module().functions()) {
+                reportFallbackFunction(project, plan.module().source(), "module '" + plan.module().name() + "'",
+                        function.spec(), warnings);
+            }
+        }
+    }
+
+    private static void reportFallbackFunction(ProjectConfig project, Path source, String owner,
+                                                InterfaceSpec.Function function, WarningListener warnings) {
+        if (function.invalidReturnIsFallback()) {
+            reportOrFailFallback(project, source, owner, function.name(), "invalidReturn", warnings);
+        }
+        if (function.uninitializedReturnIsFallback()) {
+            reportOrFailFallback(project, source, owner, function.name(), "uninitializedReturn", warnings);
+        }
+    }
+
+    private static void reportOrFailFallback(ProjectConfig project, Path source, String owner, String functionName,
+                                             String key, WarningListener warnings) {
+        String message = source + ": " + owner + " function '" + functionName + "' has no " + key + " (on the "
+                + "function, " + key + "s for its return type, or the interface/module default) - falling back "
+                + "to a zero initializer. For an enum whose 0 member means success, that reports success from a "
+                + "failed guard. Name a real sentinel.";
+        if (project.strict()) {
+            throw new CGenException(message);
+        }
+        warnings.onWarning(message);
     }
 
     /**
