@@ -184,8 +184,12 @@ This destructive command requires typing the exact project `name` from `cgen.yam
 
 - keeps **all** generated C code and every unrelated YAML file,
 - removes the CGen marker lines from the C files, then
-- deletes `cgen.yaml`, every `*.interface.yaml` and `*.module.yaml`, and the custom documentation
-  YAML the project referenced.
+- deletes `cgen.yaml` and every CGen spec YAML - `*.interface.yaml`, `*.module.yaml`,
+  `*.state-machine.yaml`, `*.status-codes.yaml`, `*.observer.yaml`, `*.command-table.yaml`,
+  `*.adapter.yaml` - and the custom documentation YAML the project referenced.
+
+An `engine: statesmith` state machine's generated `.plantuml` is the one exception: it is kept,
+with only its marker stripped, as documentation.
 
 The result is ordinary C with no trace of the generator. A detached project cannot be regenerated
 unless you configure it again from scratch with `CGen init`.

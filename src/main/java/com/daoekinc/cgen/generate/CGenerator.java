@@ -44,6 +44,36 @@ import java.util.stream.Stream;
 
 public final class CGenerator {
     private static final Pattern C_IDENTIFIER = Pattern.compile("[A-Za-z_][A-Za-z0-9_]*");
+
+    /**
+     * The single source of truth for "every YAML spec kind CGen understands" - {@code detach()}'s
+     * spec-YAML deletion list and every {@code cleanTags()}/{@code generate()} per-kind loop
+     * header reference this instead of repeating the suffix string, so a future generator kind
+     * that's added to {@link SpecKind#values()} can't be silently missed from detach's coverage
+     * the way it previously could be by forgetting one of several independent literal lists.
+     * Each kind's actual rendering (a different Spec/Renderer pair) still has to be its own loop
+     * body - that part is inherently kind-specific and isn't what this fixes.
+     */
+    private enum SpecKind {
+        INTERFACE(".interface.yaml"),
+        MODULE(".module.yaml"),
+        STATE_MACHINE(".state-machine.yaml"),
+        STATUS_CODES(".status-codes.yaml"),
+        OBSERVER(".observer.yaml"),
+        COMMAND_TABLE(".command-table.yaml"),
+        ADAPTER(".adapter.yaml");
+
+        private final String suffix;
+
+        SpecKind(String suffix) {
+            this.suffix = suffix;
+        }
+
+        String suffix() {
+            return suffix;
+        }
+    }
+
     private final YamlFiles yamlFiles;
     private final TagHelper tags;
     private final ProjectService projects;
@@ -87,7 +117,7 @@ public final class CGenerator {
         DocumentationRenderer documentation = new DocumentationRenderer(project, yamlFiles);
         Map<String, InterfaceSpec> interfaces = loadInterfaces(project);
         List<ModulePlan> modules = new ArrayList<>();
-        for (Path path : specificationFiles(scope, ".module.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.MODULE.suffix(), project)) {
             ModuleSpec module = ModuleSpec.from(path, yamlFiles.load(path));
             List<InterfaceSpec> implemented = new ArrayList<>();
             for (String name : module.implementsInterfaces()) {
@@ -132,7 +162,7 @@ public final class CGenerator {
                     sourceExisted, sourceRegions.regionCount()));
         }
         List<StatesmithRun> statesmithRuns = new ArrayList<>();
-        for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.STATE_MACHINE.suffix(), project)) {
             StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
             Path header = machine.source().getParent().resolve(machine.header());
             Path source = machine.source().getParent().resolve(machine.sourceFile());
@@ -176,7 +206,7 @@ public final class CGenerator {
                 statesmithRuns.add(new StatesmithRun(machine.source(), plantuml, smHeader, smSource));
             }
         }
-        for (Path path : specificationFiles(scope, ".status-codes.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.STATUS_CODES.suffix(), project)) {
             StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));
             Path output = path.getParent().resolve(status.header()).toAbsolutePath().normalize();
             requireUniqueDestination(destinations, output);
@@ -185,7 +215,7 @@ public final class CGenerator {
             outputs.add(new Output(status.source(), output, statusCodesRenderer.render(project, status, documentation, regions),
                     existed, regions.regionCount()));
         }
-        for (Path path : specificationFiles(scope, ".observer.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.OBSERVER.suffix(), project)) {
             ObserverSpec observer = ObserverSpec.from(path, yamlFiles.load(path));
             InterfaceSpec listener = resolveInterface(interfaces, observer.interfaceName(), path, "interface");
             requireVoidFunctions(listener, path, "observer listener");
@@ -202,7 +232,7 @@ public final class CGenerator {
             outputs.add(new Output(observer.source(), source, observerRenderer.renderSource(project, observer, listener, documentation, sourceRegions),
                     sourceExisted, sourceRegions.regionCount()));
         }
-        for (Path path : specificationFiles(scope, ".command-table.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.COMMAND_TABLE.suffix(), project)) {
             CommandTableSpec table = CommandTableSpec.from(path, yamlFiles.load(path));
             Path header = table.source().getParent().resolve(table.header());
             Path source = table.source().getParent().resolve(table.sourceFile());
@@ -217,7 +247,7 @@ public final class CGenerator {
             outputs.add(new Output(table.source(), source, commandTableRenderer.renderSource(project, table, documentation, sourceRegions),
                     sourceExisted, sourceRegions.regionCount()));
         }
-        for (Path path : specificationFiles(scope, ".adapter.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.ADAPTER.suffix(), project)) {
             AdapterSpec adapter = AdapterSpec.from(path, yamlFiles.load(path));
             InterfaceSpec from = resolveInterface(interfaces, adapter.from(), path, "from");
             InterfaceSpec to = resolveInterface(interfaces, adapter.to(), path, "to");
@@ -394,7 +424,7 @@ public final class CGenerator {
             registerEnums(declared, spec.enums(), spec.source());
         }
         Map<Path, Map<String, Path>> links = new LinkedHashMap<>();
-        for (Path path : specificationFiles(project.root(), ".module.yaml", project)) {
+        for (Path path : specificationFiles(project.root(), SpecKind.MODULE.suffix(), project)) {
             ModuleSpec module = ModuleSpec.from(path, yamlFiles.load(path));
             registerEnums(declared, module.enums(), path);
             Map<String, Path> perModule = new LinkedHashMap<>();
@@ -429,7 +459,7 @@ public final class CGenerator {
     }
 
     private static boolean isModuleSpec(Path specSource) {
-        return specSource.getFileName().toString().endsWith(".module.yaml");
+        return specSource.getFileName().toString().endsWith(SpecKind.MODULE.suffix());
     }
 
     private static void registerEnums(Map<String, List<String>> declaredEnums, List<InterfaceSpec.EnumDef> enums, Path source) {
@@ -530,7 +560,7 @@ public final class CGenerator {
      */
     public List<Path> moduleSourceFiles(ProjectConfig project, Path scope) {
         List<Path> files = new ArrayList<>();
-        for (Path path : specificationFiles(scope, ".module.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.MODULE.suffix(), project)) {
             ModuleSpec module = ModuleSpec.from(path, yamlFiles.load(path));
             Path source = module.source().getParent().resolve(module.sourceFile());
             if (Files.exists(source)) {
@@ -547,11 +577,11 @@ public final class CGenerator {
                 cleanOutputs(spec.source().getParent(), List.of(spec.header()), cleaned);
             }
         }
-        for (Path path : specificationFiles(scope, ".module.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.MODULE.suffix(), project)) {
             ModuleSpec module = ModuleSpec.from(path, yamlFiles.load(path));
             cleanOutputs(path.getParent(), List.of(module.header(), module.sourceFile()), cleaned);
         }
-        for (Path path : specificationFiles(scope, ".state-machine.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.STATE_MACHINE.suffix(), project)) {
             StateMachineSpec machine = StateMachineSpec.from(path, yamlFiles.load(path));
             if (machine.engine() == StateMachineSpec.Engine.BUILTIN) {
                 cleanOutputs(path.getParent(), List.of(machine.header(), machine.sourceFile()), cleaned);
@@ -566,19 +596,19 @@ public final class CGenerator {
                         cleaned);
             }
         }
-        for (Path path : specificationFiles(scope, ".status-codes.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.STATUS_CODES.suffix(), project)) {
             StatusCodesSpec status = StatusCodesSpec.from(path, yamlFiles.load(path));
             cleanOutputs(path.getParent(), List.of(status.header()), cleaned);
         }
-        for (Path path : specificationFiles(scope, ".observer.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.OBSERVER.suffix(), project)) {
             ObserverSpec observer = ObserverSpec.from(path, yamlFiles.load(path));
             cleanOutputs(path.getParent(), List.of(observer.header(), observer.sourceFile()), cleaned);
         }
-        for (Path path : specificationFiles(scope, ".command-table.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.COMMAND_TABLE.suffix(), project)) {
             CommandTableSpec table = CommandTableSpec.from(path, yamlFiles.load(path));
             cleanOutputs(path.getParent(), List.of(table.header(), table.sourceFile()), cleaned);
         }
-        for (Path path : specificationFiles(scope, ".adapter.yaml", project)) {
+        for (Path path : specificationFiles(scope, SpecKind.ADAPTER.suffix(), project)) {
             AdapterSpec adapter = AdapterSpec.from(path, yamlFiles.load(path));
             cleanOutputs(path.getParent(), List.of(adapter.header(), adapter.sourceFile()), cleaned);
         }
@@ -596,13 +626,9 @@ public final class CGenerator {
 
     public DetachResult detach(ProjectConfig project) {
         Set<Path> configurationFiles = new LinkedHashSet<>();
-        configurationFiles.addAll(specificationFiles(project.root(), ".interface.yaml", project));
-        configurationFiles.addAll(specificationFiles(project.root(), ".module.yaml", project));
-        configurationFiles.addAll(specificationFiles(project.root(), ".state-machine.yaml", project));
-        configurationFiles.addAll(specificationFiles(project.root(), ".status-codes.yaml", project));
-        configurationFiles.addAll(specificationFiles(project.root(), ".observer.yaml", project));
-        configurationFiles.addAll(specificationFiles(project.root(), ".command-table.yaml", project));
-        configurationFiles.addAll(specificationFiles(project.root(), ".adapter.yaml", project));
+        for (SpecKind kind : SpecKind.values()) {
+            configurationFiles.addAll(specificationFiles(project.root(), kind.suffix(), project));
+        }
         if (project.documentation().customFile() != null) {
             configurationFiles.add(project.documentation().customFile());
         }
@@ -677,7 +703,7 @@ public final class CGenerator {
 
     private Path resolveModuleSpecPath(ProjectConfig project, String moduleName) {
         List<Path> matches = new ArrayList<>();
-        for (Path path : specificationFiles(project.root(), ".module.yaml", project)) {
+        for (Path path : specificationFiles(project.root(), SpecKind.MODULE.suffix(), project)) {
             ModuleSpec candidate = ModuleSpec.from(path, yamlFiles.load(path));
             if (candidate.name().equals(moduleName)) {
                 matches.add(path);
@@ -791,7 +817,7 @@ public final class CGenerator {
 
     private Map<String, InterfaceSpec> loadInterfaces(ProjectConfig project) {
         Map<String, InterfaceSpec> result = new LinkedHashMap<>();
-        for (Path path : specificationFiles(project.root(), ".interface.yaml", project)) {
+        for (Path path : specificationFiles(project.root(), SpecKind.INTERFACE.suffix(), project)) {
             InterfaceSpec spec = InterfaceSpec.from(path, yamlFiles.load(path));
             InterfaceSpec previous = result.putIfAbsent(spec.name(), spec);
             if (previous != null) {
