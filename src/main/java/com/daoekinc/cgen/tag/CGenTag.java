@@ -18,6 +18,11 @@ public final class CGenTag {
     // plain body text, i.e. as if the region never existed).
     private static final Pattern OLD_USER_BEGIN = Pattern.compile("^\\s*/\\*@CGen\\(\\+(\\S+)\\)\\*/\\s*$");
     private static final Pattern OLD_USER_END = Pattern.compile("^\\s*/\\*@CGen\\(-(\\S+)\\)\\*/\\s*$");
+    // Written as the file's second line (right after the file marker) by TagHelper.writeGenerated,
+    // and compared on the next readForGeneration to detect a hand-edit outside every usercode
+    // region - see TagHelper for the full mechanism. Same optional leading "'" as MARKER, so it
+    // stays valid when the file marker itself is PlantUML-commented (a .plantuml file).
+    private static final Pattern SKELETON_HASH = Pattern.compile("^\\s*(?:'\\s*)?/\\*@CGen\\(skeleton-hash:([0-9a-fA-F]+)\\)\\*/\\s*$");
 
     private CGenTag() {
     }
@@ -64,6 +69,23 @@ public final class CGenTag {
         return matcher.matches() ? matcher.group(1) : null;
     }
 
+    public static String skeletonHash(String hash) {
+        return "/*@CGen(skeleton-hash:" + hash + ")*/";
+    }
+
+    /** The hash from a "/*@CGen(skeleton-hash:...)*&#47;" line, or null if the line isn't one. */
+    public static String skeletonHashValue(String line) {
+        Matcher matcher = SKELETON_HASH.matcher(line);
+        return matcher.matches() ? matcher.group(1) : null;
+    }
+
+    /** The region name from an "/*@CGen(orphaned-user-region:name)*&#47;" line, or null. */
+    public static String orphanedRegionName(String line) {
+        String payload = payload(line);
+        String prefix = "orphaned-user-region:";
+        return payload != null && payload.startsWith(prefix) ? payload.substring(prefix.length()) : null;
+    }
+
     private static String payload(String line) {
         Matcher matcher = MARKER.matcher(line);
         if (!matcher.matches()) {
@@ -73,6 +95,7 @@ public final class CGenTag {
     }
 
     public static boolean isMarker(String line) {
-        return MARKER.matcher(line).matches() || USER_BEGIN.matcher(line).matches() || USER_END.matcher(line).matches();
+        return MARKER.matcher(line).matches() || USER_BEGIN.matcher(line).matches() || USER_END.matcher(line).matches()
+                || SKELETON_HASH.matcher(line).matches();
     }
 }

@@ -312,7 +312,8 @@ public final class CGenCli {
                 out.println("Project root: " + project.root());
                 out.println("Scope: " + scope);
             }
-            files.addAll(generator.generate(project, scope, force, progressListener(project, verbose), switchEnumConfirmation(project)));
+            files.addAll(generator.generate(project, scope, force, progressListener(project, verbose), switchEnumConfirmation(project),
+                    warningListener()));
         } else if (verbose) {
             out.println("No cgen.yaml found at or above " + workingDirectory
                     + " - scanning " + nestedScanRoot + " for nested projects only (--also-nested)");
@@ -325,7 +326,7 @@ public final class CGenCli {
                     out.println("Nested project: " + nestedProject.root());
                 }
                 files.addAll(generator.generate(nestedProject, nestedProject.root(), force,
-                        progressListener(nestedProject, verbose), switchEnumConfirmation(nestedProject)));
+                        progressListener(nestedProject, verbose), switchEnumConfirmation(nestedProject), warningListener()));
             }
         }
         if (!files.isEmpty()) {
@@ -408,6 +409,10 @@ public final class CGenCli {
         };
     }
 
+    private CGenerator.WarningListener warningListener() {
+        return message -> out.println(YELLOW_BOLD + "Warning: " + RESET + message);
+    }
+
     private CGenerator.ProgressListener progressListener(ProjectConfig project, boolean verbose) {
         if (!verbose) {
             return (completed, total, specSource, outputPath, existed, regionsCarried) ->
@@ -453,7 +458,8 @@ public final class CGenCli {
             out.println("Moved " + project.root().relativize(move.from()) + " -> " + project.root().relativize(move.to()));
         }
         out.println("Renamed module '" + result.oldName() + "' to '" + result.newName() + "'");
-        List<Path> files = generator.generate(project, project.root(), false, progressListener(project, false));
+        List<Path> files = generator.generate(project, project.root(), false, progressListener(project, false),
+                switchEnumConfirmation(project), warningListener());
         if (!files.isEmpty()) {
             out.println();
         }

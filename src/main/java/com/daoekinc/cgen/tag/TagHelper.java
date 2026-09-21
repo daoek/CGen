@@ -7,6 +7,8 @@ import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -25,7 +27,15 @@ public final class TagHelper {
             if (!generated && !force) {
                 throw new CGenException("Refusing to overwrite non-CGen file " + output + " (use -f/--force to overwrite)");
             }
-            return new UserRegions(generated ? extract(content, output) : Map.of());
+            // extract() first: an unparseable (e.g. old-syntax) file gets that specific, more
+            // actionable error, rather than the generic skeleton-mismatch one below - a file
+            // that fails to parse at all will also usually fail the hash comparison, since the
+            // hash is computed the same region-aware way.
+            Map<String, String> regions = generated ? extract(content, output) : Map.of();
+            if (generated) {
+                requireSkeletonUnchanged(output, content, force);
+            }
+            return new UserRegions(regions);
         } catch (IOException exception) {
             throw new CGenException("Cannot read " + output + ": " + exception.getMessage(), exception);
         }
@@ -33,10 +43,117 @@ public final class TagHelper {
 
     public void writeGenerated(Path output, String content, String lineEnding) {
         String normalized = content.replace("\r\n", "\n").replace('\r', '\n');
+        normalized = insertSkeletonHash(normalized);
         if (!lineEnding.equals("\n")) {
             normalized = normalized.replace("\n", lineEnding);
         }
         writeAtomic(output, normalized);
+    }
+
+    /**
+     * Refuses to overwrite {@code output} if its generated (non-usercode-region) content was
+     * hand-edited since CGen last wrote it - caught by comparing the current file's "skeleton"
+     * hash (every usercode region body blanked, so an edit *inside* a region never trips this)
+     * against the one {@link #insertSkeletonHash} embedded on the file's second line at that last
+     * write. A file from before this feature existed has no stored hash yet - skipped, not
+     * flagged, and gets one on its next write.
+     */
+    private static void requireSkeletonUnchanged(Path output, String content, boolean force) {
+        String[] firstTwoLines = firstTwoLines(content);
+        if (firstTwoLines == null) {
+            return;
+        }
+        String storedHash = CGenTag.skeletonHashValue(firstTwoLines[1]);
+        if (storedHash == null) {
+            return;
+        }
+        String rest = content.substring(firstTwoLines[0].length() + 1 + firstTwoLines[1].length() + 1);
+        String currentHash = skeletonHash(rest);
+        if (!force && !currentHash.equalsIgnoreCase(storedHash)) {
+            throw new CGenException(output + " was edited outside its usercode regions since CGen last generated "
+                    + "it - regenerating would silently overwrite that change.",
+                    "Fix it by", "moving the change into a usercode region or into the YAML spec that describes "
+                            + "it, or re-run generate with -f/--force to overwrite it anyway.");
+        }
+    }
+
+    /** Embeds a hash of {@code content}'s skeleton as its second line, right after the file marker. */
+    private static String insertSkeletonHash(String content) {
+        int firstNewline = content.indexOf('\n');
+        if (firstNewline < 0) {
+            return content;
+        }
+        String firstLine = content.substring(0, firstNewline);
+        if (!CGenTag.isGeneratedFile(firstLine)) {
+            return content;
+        }
+        String rest = content.substring(firstNewline + 1);
+        // Match whatever comment style the file marker itself used - a PlantUML file's marker is
+        // "'"-prefixed (no /* */ in PlantUML), and the hash line must be too, or it's invalid
+        // syntax in that file instead of a harmless comment.
+        String prefix = firstLine.stripLeading().startsWith("'") ? "' " : "";
+        return firstLine + "\n" + prefix + CGenTag.skeletonHash(skeletonHash(rest)) + "\n" + rest;
+    }
+
+    /**
+     * Content with every usercode region's body blanked (begin/end marker lines kept), so the
+     * result changes only when something *outside* a region changes - what a hand-edit made
+     * inside a region looks like to CGen is irrelevant here, that's the whole point of regions.
+     */
+    private static String stripRegionBodies(String content) {
+        List<String> kept = new ArrayList<>();
+        boolean inRegion = false;
+        int depth = 0;
+        for (String line : content.split("\\R", -1)) {
+            String beginName = CGenTag.userBeginName(line);
+            boolean isEnd = CGenTag.isUserEnd(line);
+            if (!inRegion) {
+                kept.add(line);
+                if (beginName != null) {
+                    inRegion = true;
+                    depth = 1;
+                }
+                continue;
+            }
+            if (beginName != null) {
+                depth++;
+            } else if (isEnd) {
+                depth--;
+                if (depth == 0) {
+                    inRegion = false;
+                    kept.add(line);
+                }
+            }
+        }
+        return String.join("\n", kept);
+    }
+
+    private static String skeletonHash(String content) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] fullHash = digest.digest(stripRegionBodies(content).getBytes(StandardCharsets.UTF_8));
+            StringBuilder hex = new StringBuilder();
+            for (int i = 0; i < 8; i++) {
+                hex.append(String.format("%02x", fullHash[i]));
+            }
+            return hex.toString();
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 must be available on every JVM", exception);
+        }
+    }
+
+    /** The file's first two lines, or null if it has fewer than two. */
+    private static String[] firstTwoLines(String content) {
+        int firstNewline = content.indexOf('\n');
+        if (firstNewline < 0) {
+            return null;
+        }
+        String rest = content.substring(firstNewline + 1);
+        int secondNewline = rest.indexOf('\n');
+        if (secondNewline < 0) {
+            return null;
+        }
+        return new String[] {content.substring(0, firstNewline), rest.substring(0, secondNewline)};
     }
 
     public boolean stripTags(Path file) {

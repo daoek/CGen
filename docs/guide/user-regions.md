@@ -143,6 +143,35 @@ because its content is gone afterwards.
     region's two marker lines to the current syntax, keeping the code between them exactly as it
     is, then run `generate` again.
 
+## Files CGen will not overwrite either: an edit outside any region
+
+Every generated file's second line is a hash of everything in it **outside** its usercode regions:
+
+```c
+/*@CGen(file:module-source:ra_iic.module.yaml)*/
+/*@CGen(skeleton-hash:afa5049c3118ea5c)*/
+```
+
+If that hash no longer matches when `generate` runs again, something outside every region changed
+since CGen last wrote the file — by hand, by another tool, whatever the cause. `generate` refuses,
+naming the file, rather than silently overwriting whatever that change was. Move it into a
+usercode region or into the YAML spec, or pass `--force` to overwrite it anyway. A file from before
+this existed has no hash yet and is not flagged; it gets one on its next regeneration.
+
+This is a second, independent line of defense from the marker check above — either one refusing is
+enough to keep the file untouched.
+
+## Orphaned regions are reported on every run
+
+An [orphaned region](#when-you-remove-something-from-the-yaml) is kept in the file, but you would
+otherwise only find it by opening that file. `generate` also prints every orphan it wrote, with
+file and line, so a non-interactive run cannot finish without it showing up somewhere:
+
+```console
+Warning: ra_iic.c:42: orphaned user region 'function.common_iic.write.body' - its YAML item is
+gone; move the code where it belongs, then delete the region
+```
+
 ## Detaching permanently
 
 To remove CGen from a project for good:

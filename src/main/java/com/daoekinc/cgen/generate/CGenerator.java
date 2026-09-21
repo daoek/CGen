@@ -79,6 +79,11 @@ public final class CGenerator {
 
     public List<Path> generate(ProjectConfig project, Path scope, boolean force, ProgressListener progress,
                                SwitchEnumConfirmation switchEnumConfirmation) {
+        return generate(project, scope, force, progress, switchEnumConfirmation, message -> { });
+    }
+
+    public List<Path> generate(ProjectConfig project, Path scope, boolean force, ProgressListener progress,
+                               SwitchEnumConfirmation switchEnumConfirmation, WarningListener warnings) {
         DocumentationRenderer documentation = new DocumentationRenderer(project, yamlFiles);
         Map<String, InterfaceSpec> interfaces = loadInterfaces(project);
         List<ModulePlan> modules = new ArrayList<>();
@@ -247,6 +252,7 @@ public final class CGenerator {
                 content = SwitchTagProcessor.process(content, output.path(), project.indent(), resolver);
             }
             tags.writeGenerated(output.path(), content, project.lineEnding());
+            reportOrphanedRegions(output.path(), content, warnings);
             completed[0]++;
             progress.onFileGenerated(completed[0], total, output.specSource(), output.path(), output.existed(), output.regionsCarried());
         }
@@ -266,6 +272,23 @@ public final class CGenerator {
             }
         }
         return List.copyOf(generatedFiles);
+    }
+
+    /**
+     * Orphaned regions are already kept in the written file (see
+     * {@code UserRegions.renderOrphans()}) - this only makes them visible in the run's own
+     * output too, with file and line, so a whole non-interactive {@code generate} can't finish
+     * without anyone noticing one appeared.
+     */
+    private static void reportOrphanedRegions(Path path, String content, WarningListener warnings) {
+        String[] lines = content.split("\n", -1);
+        for (int index = 0; index < lines.length; index++) {
+            String name = CGenTag.orphanedRegionName(lines[index]);
+            if (name != null) {
+                warnings.onWarning(path + ":" + (index + 1) + ": orphaned user region '" + name
+                        + "' - its YAML item is gone; move the code where it belongs, then delete the region");
+            }
+        }
     }
 
     private static boolean hasGeneratedMarker(Path file) {
@@ -292,6 +315,12 @@ public final class CGenerator {
     public interface SwitchEnumConfirmation {
         /** Asked once per externally-resolved enum (not declared in any YAML enums:), before it's used. */
         boolean confirm(String enumType, Path sourceFile, List<String> members);
+    }
+
+    @FunctionalInterface
+    public interface WarningListener {
+        /** A non-fatal problem worth the user's attention - an orphaned region, a fallback default, ... */
+        void onWarning(String message);
     }
 
     /**
