@@ -5,6 +5,7 @@ import com.daoekinc.cgen.config.YamlFiles;
 import com.daoekinc.cgen.generate.CGenerator;
 import com.daoekinc.cgen.model.ProjectConfig;
 import com.daoekinc.cgen.project.ProjectService;
+import com.daoekinc.cgen.tag.PrototypeScanner;
 import com.daoekinc.cgen.tag.TagHelper;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -32,6 +33,7 @@ public final class CGenCli {
     private final PrintStream err;
     private final ProjectService projects;
     private final CGenerator generator;
+    private final TagHelper tags;
 
     public CGenCli(Path workingDirectory, PrintStream out, PrintStream err) {
         this(workingDirectory, System.in, out, err);
@@ -44,7 +46,8 @@ public final class CGenCli {
         this.err = err;
         YamlFiles yaml = new YamlFiles();
         projects = new ProjectService(yaml);
-        generator = new CGenerator(yaml, new TagHelper(), projects);
+        tags = new TagHelper();
+        generator = new CGenerator(yaml, tags, projects);
     }
 
     public int run(String... args) {
@@ -59,6 +62,7 @@ public final class CGenCli {
                 case "gen", "generate" -> generate(args);
                 case "rename" -> rename(args);
                 case "detach" -> detach(args);
+                case "fix-prototypes" -> fixPrototypes(args);
                 default -> throw new CGenException("Unknown command '" + args[0] + "'");
             };
         } catch (CGenException exception) {
@@ -456,6 +460,76 @@ public final class CGenCli {
         return 0;
     }
 
+    private int fixPrototypes(String[] args) {
+        Path directory = workingDirectory;
+        boolean directorySpecified = false;
+        for (int index = 1; index < args.length; index++) {
+            if (!directorySpecified) {
+                directory = resolveDirectory(args[index]);
+                directorySpecified = true;
+            } else {
+                throw new CGenException("Usage: CGen fix-prototypes [directory]");
+            }
+        }
+        ProjectConfig project = projects.findAndLoad(workingDirectory);
+        Path scope = projects.existingDirectory(project, directory);
+
+        int changedFiles = 0;
+        int addedPrototypes = 0;
+        for (Path file : generator.moduleSourceFiles(project, scope)) {
+            String content;
+            try {
+                content = Files.readString(file);
+            } catch (IOException exception) {
+                throw new CGenException("Cannot read " + file + ": " + exception.getMessage(), exception);
+            }
+            String normalized = content.replace("\r\n", "\n").replace('\r', '\n');
+            PrototypeScanner.Scan scan = PrototypeScanner.scan(normalized, displayPath(file).toString());
+            if (scan.isEmpty()) {
+                continue;
+            }
+
+            out.println();
+            out.println(CYAN_BOLD + displayPath(file) + RESET + " - " + scan.missing().size()
+                    + " function(s) without a prototype:");
+            for (PrototypeScanner.Missing missing : scan.missing()) {
+                out.println("  " + missing.name());
+            }
+            out.println();
+            printPrototypeDiff(scan.diff());
+            out.print("Add these prototypes to the module.source.prototypes usercode region? [y/N]: ");
+            out.flush();
+            String answer;
+            try {
+                answer = input.readLine();
+            } catch (IOException exception) {
+                throw new CGenException("Cannot read confirmation: " + exception.getMessage(), exception);
+            }
+            if (answer != null && (answer.equalsIgnoreCase("y") || answer.equalsIgnoreCase("yes"))) {
+                tags.writeGenerated(file, scan.updatedContent(), project.lineEnding());
+                changedFiles++;
+                addedPrototypes += scan.missing().size();
+            }
+        }
+        out.println();
+        out.println(addedPrototypes + " prototype(s) added in " + changedFiles + " file(s)");
+        return 0;
+    }
+
+    private void printPrototypeDiff(String diff) {
+        for (String line : diff.split("\n")) {
+            if (line.startsWith("@@")) {
+                out.println(CYAN_BOLD + line + RESET);
+            } else if (line.startsWith("+++") || line.startsWith("---")) {
+                out.println(line);
+            } else if (line.startsWith("+")) {
+                out.println(GREEN + line + RESET);
+            } else {
+                out.println(line);
+            }
+        }
+    }
+
     private Path resolveDirectory(String value) {
         return workingDirectory.resolve(value).normalize();
     }
@@ -488,6 +562,7 @@ public final class CGenCli {
                   CGen create adapter <name> --from <interface> --to <interface> [directory]
                   CGen gen | generate [directory] [-f|--force] [-v|--verbose] [--also-nested]
                   CGen rename module <old-name> <new-name>
+                  CGen fix-prototypes [directory]
                   CGen detach
 
                 -f, --force
@@ -508,6 +583,14 @@ public final class CGenCli {
                   progress, no cgen.yaml checking yet) and asks for confirmation with that
                   count; only once confirmed does the slower real scan run - checking each
                   directory for a cgen.yaml, live progress again - before generating anything.
+
+                fix-prototypes
+                  Scans every CGen-generated module source (.c) file in scope for functions the
+                  user wrote directly inside a usercode region that have no prototype anywhere in
+                  the file (plain user code, not YAML-spec'd module functions - those already get
+                  one). For each file with findings, shows a unified diff (3 lines of context)
+                  of the prototypes it would add to the module.source.prototypes usercode region
+                  at the top of the file, and asks to confirm before writing anything.
                 """);
     }
 }

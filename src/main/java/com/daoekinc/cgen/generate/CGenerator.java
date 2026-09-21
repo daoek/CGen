@@ -384,6 +384,22 @@ public final class CGenerator {
         return members;
     }
 
+    /**
+     * Existing module source (.c) files within scope, one per .module.yaml found - used by
+     * {@code fix-prototypes} to scan already-generated files without re-rendering anything.
+     */
+    public List<Path> moduleSourceFiles(ProjectConfig project, Path scope) {
+        List<Path> files = new ArrayList<>();
+        for (Path path : specificationFiles(scope, ".module.yaml", project)) {
+            ModuleSpec module = ModuleSpec.from(path, yamlFiles.load(path));
+            Path source = module.source().getParent().resolve(module.sourceFile());
+            if (Files.exists(source)) {
+                files.add(source);
+            }
+        }
+        return files;
+    }
+
     public List<Path> cleanTags(ProjectConfig project, Path scope) {
         List<Path> cleaned = new ArrayList<>();
         for (InterfaceSpec spec : loadInterfaces(project).values()) {

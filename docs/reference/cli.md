@@ -18,6 +18,7 @@ CGen create status-codes <name> [directory]
 CGen create adapter <name> --from <interface> --to <interface> [directory]
 CGen gen | generate [directory] [-f|--force] [-v|--verbose] [--also-nested]
 CGen rename module <old-name> <new-name>
+CGen fix-prototypes [directory]
 CGen detach
 ```
 
@@ -159,6 +160,49 @@ generated identifiers built from the module name are rebuilt consistently.
 
     Code inside user regions, and code elsewhere in your project that calls the old
     `ra_iic_*` functions, is yours to update. The compiler will find them.
+
+---
+
+## `CGen fix-prototypes`
+
+```console
+CGen fix-prototypes [directory]
+```
+
+Scans every CGen-generated module source (`.c`) file in scope for functions you wrote directly
+inside a usercode region that have no prototype anywhere in the file. This only catches plain
+hand-written functions — a helper you added yourself, not part of any `.module.yaml` — since
+YAML-spec'd module functions already get a prototype from CGen.
+
+For each file with findings, it prints the function names and a unified diff (3 lines of context)
+of the prototype(s) it would add to the `module.source.prototypes` usercode region at the top of
+the file, then asks before writing anything:
+
+```console
+drivers\RA\ra_iic.c - 1 function(s) without a prototype:
+  checksum
+
+--- a/drivers\RA\ra_iic.c
++++ b/drivers\RA\ra_iic.c
+@@ -8,6 +8,7 @@
+ /*@CGen usercode+ module.source.variables*/
+ /*@CGen usercode-*/
+ /*@CGen usercode+ module.source.prototypes*/
++static uint8_t checksum(const uint8_t *data, size_t length);
+ /*@CGen usercode-*/
+
+ /*@CGen usercode+ module.source.includes*/
+Add these prototypes to the module.source.prototypes usercode region? [y/N]:
+```
+
+Answering anything but `y`/`yes` leaves that file untouched and moves on to the next one; the
+command itself always exits `0` and reports how many prototypes were added, across how many files.
+
+!!! note "Single-line signatures only"
+
+    This is a line-based scan, not a C parser. A function signature split across multiple lines
+    won't be recognized — keep the return type, name and parameter list on one line, brace on the
+    next (or the same) line, as CGen's own generated functions do.
 
 ---
 

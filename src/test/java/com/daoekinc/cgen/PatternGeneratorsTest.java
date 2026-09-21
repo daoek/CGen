@@ -150,7 +150,43 @@ class PatternGeneratorsTest {
     }
 
     @Test
-    void requiresInvalidReturnForNonVoidModuleFunction() throws Exception {
+    void moduleUsesTypeKeyedReturnDefaults() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("flash.module.yaml"), """
+                kind: module
+                name: flash
+                implements: []
+                includes: []
+                context: []
+                variables: []
+                invalidReturn: -1
+                invalidReturns:
+                  flash_command_t: FLASH_COMMAND_NONE
+                enums:
+                  - name: flash_command_t
+                    values:
+                      - { name: FLASH_COMMAND_NONE }
+                      - { name: FLASH_COMMAND_ERASE }
+                functions:
+                  - name: generate_command
+                    return: flash_command_t
+                    parameters: []
+                  - name: read_status
+                    return: int32_t
+                    parameters: []
+                singleton: false
+                """);
+
+        assertEquals(0, cli.run("generate"));
+
+        String source = Files.readString(temporaryDirectory.resolve("flash.c"));
+        assertTrue(source.contains("flash_command_t cgen_result = FLASH_COMMAND_NONE;"));
+        assertTrue(source.contains("int32_t cgen_result = -1;"));
+    }
+
+    @Test
+    void zeroInitializesModuleFunctionWithoutInvalidReturn() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));
         Files.writeString(temporaryDirectory.resolve("core.module.yaml"), """
@@ -166,8 +202,8 @@ class PatternGeneratorsTest {
                     parameters: []
                 singleton: false
                 """);
-        assertEquals(1, cli.run("generate"));
-        assertTrue(cli.errors().contains("invalidReturn is required for non-void function 'initialize_core'"));
+        assertEquals(0, cli.run("generate"));
+        assertTrue(Files.readString(temporaryDirectory.resolve("core.c")).contains("(bool){0}"));
     }
 
     @Test

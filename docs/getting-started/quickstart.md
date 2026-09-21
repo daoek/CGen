@@ -96,9 +96,10 @@ functions:
 ```
 
 `invalidReturn` and `uninitializedReturn` are what the generated guards return when a caller
-passes a null interface, or calls before anything was bound. CGen requires them for any
-non-`void` function, rather than silently inventing a `-1` that may not be a valid value of your
-return type.
+passes a null interface, or calls before anything was bound. Give them per function, per return
+type through `invalidReturns`, or once per interface as above - CGen never spreads one scalar
+across return types it does not fit. See
+[`invalidReturn` and `uninitializedReturn`](../generators/interface.md#invalidreturn-and-uninitializedreturn).
 
 ## 4. Describe the module
 

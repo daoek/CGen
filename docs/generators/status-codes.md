@@ -100,8 +100,8 @@ void caller(void)
 ## Relationship to `invalidReturn`
 
 This generator is **purely additive**. It does not change how an [interface](interface.md) declares
-its own `invalidReturn` and `uninitializedReturn` — those still have to be given per interface or
-per function.
+its own `invalidReturn` and `uninitializedReturn` — those are still resolved per function, per
+return type, or per interface.
 
 What it does give you is something sensible to point them at:
 

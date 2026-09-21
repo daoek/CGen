@@ -3,6 +3,7 @@ package com.daoekinc.cgen.model;
 import com.daoekinc.cgen.CGenException;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -34,13 +35,58 @@ public record InterfaceSpec(
                            String invalidReturn, String uninitializedReturn) {
     }
 
+    /**
+     * File-level fallbacks for the guard return values of every function in one spec. A function
+     * resolves its value from, in order: its own {@code invalidReturn} key, the {@code invalidReturns}
+     * mapping entry for its return type, the scalar {@code invalidReturn}, and finally a zero
+     * initializer for the return type. The typed mapping is what lets one file mix an {@code int32_t}
+     * status default with a struct or enum return that {@code -1} would not compile for.
+     */
+    public record ReturnDefaults(String invalidReturn, String uninitializedReturn,
+                                 Map<String, String> invalidByType, Map<String, String> uninitializedByType) {
+
+        public static final ReturnDefaults NONE = new ReturnDefaults(null, null, Map.of(), Map.of());
+
+        static ReturnDefaults from(Map<String, Object> yaml, String context) {
+            String invalid = Values.optionalString(yaml, "invalidReturn", null, context);
+            if (invalid != null) {
+                invalid = oneLineExpression(invalid, context + ".invalidReturn");
+            }
+            String uninitialized = Values.optionalString(yaml, "uninitializedReturn", invalid, context);
+            if (uninitialized != null) {
+                uninitialized = oneLineExpression(uninitialized, context + ".uninitializedReturn");
+            }
+            Map<String, String> invalidByType = Values.stringMap(yaml, "invalidReturns", context);
+            Map<String, String> uninitializedByType = new LinkedHashMap<>(invalidByType);
+            uninitializedByType.putAll(Values.stringMap(yaml, "uninitializedReturns", context));
+            return new ReturnDefaults(invalid, uninitialized, invalidByType, Map.copyOf(uninitializedByType));
+        }
+
+        String invalidFor(String returnType) {
+            return invalidByType.getOrDefault(returnType, invalidReturn);
+        }
+
+        String uninitializedFor(String returnType) {
+            return uninitializedByType.getOrDefault(returnType, uninitializedReturn);
+        }
+    }
+
+    // Used when neither the function nor its file names a guard return value. A compound literal
+    // zero-initializes any complete C type - scalar, enum, struct, union or pointer - so the
+    // generated guard always compiles. It is a last resort: for an enum whose 0 value means
+    // success, name a real sentinel through invalidReturns instead.
+    static String zeroReturn(String returnType) {
+        return "(" + returnType + "){0}";
+    }
+
     public record Parameter(String type, String name, String description) {
     }
 
     public static InterfaceSpec from(Path source, Map<String, Object> yaml) {
         String context = source.toString();
         Values.onlyKeys(yaml, context, "kind", "name", "description", "header", "invalidReturn",
-                "uninitializedReturn", "includes", "enums", "structs", "functions");
+                "uninitializedReturn", "invalidReturns", "uninitializedReturns", "includes", "enums",
+                "structs", "functions");
         String kind = Values.requiredString(yaml, "kind", context);
         if (!kind.equals("interface")) {
             throw new CGenException(context + ".kind must be interface");
@@ -48,8 +94,9 @@ public record InterfaceSpec(
         String name = Values.identifier(Values.requiredString(yaml, "name", context), context + ".name");
         String description = Values.optionalString(yaml, "description", name + " interface", context);
         String header = Values.outputFile(Values.optionalString(yaml, "header", name + "_I.h", context), ".h", context + ".header");
-        String invalidReturn = Values.optionalString(yaml, "invalidReturn", null, context);
-        String uninitializedReturn = Values.optionalString(yaml, "uninitializedReturn", invalidReturn, context);
+        ReturnDefaults returnDefaults = ReturnDefaults.from(yaml, context);
+        String invalidReturn = returnDefaults.invalidReturn();
+        String uninitializedReturn = returnDefaults.uninitializedReturn();
         List<String> includes = Values.includeList(yaml, "includes", context);
 
         List<EnumDef> enums = parseEnums(yaml, "enums", context);
@@ -66,7 +113,7 @@ public record InterfaceSpec(
             structs.add(new StructDef(structName, Values.optionalString(item, "description", "", itemContext), fields));
         }
 
-        List<Function> functions = parseFunctions(yaml, "functions", context, invalidReturn, uninitializedReturn);
+        List<Function> functions = parseFunctions(yaml, "functions", context, returnDefaults);
         Values.uniqueNames(structs.stream().map(StructDef::name).toList(), context + ".structs");
         return new InterfaceSpec(source, name, description, header, invalidReturn, uninitializedReturn,
                 includes, List.copyOf(enums), List.copyOf(structs), List.copyOf(functions));
@@ -96,14 +143,14 @@ public record InterfaceSpec(
     }
 
     static List<Function> parseFunctions(Map<String, Object> yaml, String key, String context,
-                                         String defaultInvalidReturn, String defaultUninitializedReturn) {
+                                         ReturnDefaults defaults) {
         List<Function> functions = new ArrayList<>();
         List<Map<String, Object>> functionItems = Values.mapList(yaml, key, context);
         for (int functionIndex = 0; functionIndex < functionItems.size(); functionIndex++) {
             Map<String, Object> item = functionItems.get(functionIndex);
             String itemContext = context + "." + key + "[" + functionIndex + "]";
             Values.onlyKeys(item, itemContext, "name", "return", "description", "parameters", "invalidReturn", "uninitializedReturn");
-            functions.add(parseFunctionItem(item, itemContext, defaultInvalidReturn, defaultUninitializedReturn));
+            functions.add(parseFunctionItem(item, itemContext, defaults));
         }
         Values.uniqueNames(functions.stream().map(Function::name).toList(), context + "." + key);
         return List.copyOf(functions);
@@ -112,23 +159,29 @@ public record InterfaceSpec(
     // Parses the fields common to a "functions" list item, without enforcing which keys are
     // allowed - callers run their own Values.onlyKeys first, since a module function item
     // permits an extra "visibility" key that an interface function item does not.
-    static Function parseFunctionItem(Map<String, Object> item, String itemContext,
-                                      String defaultInvalidReturn, String defaultUninitializedReturn) {
+    static Function parseFunctionItem(Map<String, Object> item, String itemContext, ReturnDefaults defaults) {
         String functionName = Values.identifier(Values.requiredString(item, "name", itemContext), itemContext + ".name");
         String returnType = oneLine(Values.optionalString(item, "return", "void", itemContext), itemContext + ".return");
         List<Parameter> parameters = parseParameters(item, "parameters", itemContext, "function " + functionName);
-        String functionInvalidReturn = Values.optionalString(item, "invalidReturn", defaultInvalidReturn, itemContext);
-        if (!returnType.equals("void") && functionInvalidReturn == null) {
-            throw new CGenException(itemContext + ".invalidReturn is required for non-void function '" + functionName + "'",
-                    "Example YAML", "invalidReturn: -1");
-        }
+        String functionInvalidReturn = Values.optionalString(item, "invalidReturn",
+                defaults.invalidFor(returnType), itemContext);
         if (functionInvalidReturn != null) {
-            functionInvalidReturn = oneLine(functionInvalidReturn, itemContext + ".invalidReturn");
+            functionInvalidReturn = oneLineExpression(functionInvalidReturn, itemContext + ".invalidReturn");
         }
+        String defaultUninitializedReturn = defaults.uninitializedFor(returnType);
         String functionUninitializedReturn = Values.optionalString(item, "uninitializedReturn",
                 defaultUninitializedReturn != null ? defaultUninitializedReturn : functionInvalidReturn, itemContext);
         if (functionUninitializedReturn != null) {
-            functionUninitializedReturn = oneLine(functionUninitializedReturn, itemContext + ".uninitializedReturn");
+            functionUninitializedReturn = oneLineExpression(functionUninitializedReturn, itemContext + ".uninitializedReturn");
+        }
+        // No value anywhere: zero-initialize the return type so the generated guard still compiles.
+        if (!returnType.equals("void")) {
+            if (functionInvalidReturn == null) {
+                functionInvalidReturn = zeroReturn(returnType);
+            }
+            if (functionUninitializedReturn == null) {
+                functionUninitializedReturn = zeroReturn(returnType);
+            }
         }
         return new Function(functionName, returnType,
                 Values.optionalString(item, "description", functionName, itemContext), List.copyOf(parameters),
@@ -167,6 +220,15 @@ public record InterfaceSpec(
         }
         Values.uniqueNames(parameters.stream().map(Parameter::name).toList(), itemContext + " " + uniqueLabel);
         return List.copyOf(parameters);
+    }
+
+    // Return values may be compound literals - "(flash_command_t){0}" - so braces are allowed
+    // here even though they are not in a declaration fragment.
+    static String oneLineExpression(String value, String context) {
+        if (value.isBlank() || value.contains("\n") || value.contains("\r") || value.contains(";")) {
+            throw new CGenException(context + " must be a safe one-line C expression");
+        }
+        return value;
     }
 
     static String oneLine(String value, String context) {

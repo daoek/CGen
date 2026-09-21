@@ -53,6 +53,8 @@ The interface YAML and its generated header live in the same directory.
 | `header` | yes | Generated header file name |
 | `invalidReturn` | see below | Returned when the caller passes a null interface |
 | `uninitializedReturn` | see below | Returned when nothing has been bound yet |
+| `invalidReturns` | no | Per-return-type `invalidReturn` defaults |
+| `uninitializedReturns` | no | Per-return-type `uninitializedReturn` defaults |
 | `includes` | no | Verbatim include lines |
 | `enums` | no | `typedef enum` types emitted before the table |
 | `structs` | no | `typedef struct` types emitted before the table |
@@ -60,12 +62,28 @@ The interface YAML and its generated header live in the same directory.
 
 ### `invalidReturn` and `uninitializedReturn`
 
-Every non-`void` function **must** have an `invalidReturn`, either at interface level (a default
-for all of them) or on the individual function. CGen refuses to invent one, because a silent `-1`
-is not a valid value for an enum, a pointer, an unsigned type, or an application-specific status.
+`invalidReturn` is what a dispatcher returns when the caller passes a null interface, and
+`uninitializedReturn` is what it returns for a call made before anything is bound. A function
+resolves each of them in this order:
 
-`uninitializedReturn` is the same idea for a call made before anything is bound. Both can be
-overridden per function:
+1. the function's own `invalidReturn` / `uninitializedReturn`,
+2. the `invalidReturns` / `uninitializedReturns` entry for its return type,
+3. the interface-level scalar `invalidReturn` / `uninitializedReturn`,
+4. a zero initializer for the return type - `(flash_command_t){0}`.
+
+A single scalar default only fits one family of return types: `-1` does not compile for a struct
+and means nothing for an enum. Key the defaults by return type when a file mixes them:
+
+```yaml
+invalidReturn: -1                        # still the fallback for int-like returns
+invalidReturns:
+  flash_command_t: FLASH_COMMAND_NONE
+  flash_config_t: '(flash_config_t){0}'
+uninitializedReturns:
+  flash_command_t: FLASH_COMMAND_UNKNOWN
+```
+
+Both can also be overridden per function:
 
 ```yaml
 functions:
@@ -75,6 +93,11 @@ functions:
     invalidReturn: false
     uninitializedReturn: false
 ```
+
+Step 4 exists so a spec always generates compiling C, not so you can skip the value. For an enum
+whose `0` value means success, a zero initializer turns a failed guard into a reported success -
+name a real sentinel through `invalidReturns` for those types. Whatever value you name must be
+visible where it is used: declare the enum in `enums`, or pull its header in through `includes`.
 
 ### `functions`
 

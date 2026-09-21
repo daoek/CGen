@@ -41,9 +41,13 @@ interface, its context and the function pointer before calling through; a bind f
 
 ### No silent invalid return values
 
-Every non-`void` interface function must supply `invalidReturn` (at interface or function level).
-CGen refuses to guess, because a fabricated `-1` is not a valid value of an enum, a pointer, or an
-unsigned type. `uninitializedReturn` covers the "nothing bound yet" case in the same way.
+Every non-`void` interface function should supply `invalidReturn` - on the function, on
+`invalidReturns` for its return type, or as the interface-level default. A fabricated `-1` is not a
+valid value of an enum, a pointer, or an unsigned type, so CGen never spreads one scalar across
+unrelated return types. Name nothing at all and the guard falls back to a zero initializer,
+`(flash_command_t){0}`: it compiles for any type, but for an enum whose `0` value means success it
+reports success from a failed guard. Name a real sentinel for those.
+`uninitializedReturn` covers the "nothing bound yet" case in the same way.
 
 ### Unused parameters are consumed explicitly
 

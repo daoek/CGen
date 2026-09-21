@@ -51,8 +51,12 @@ kind: interface
 name: common_iic
 description: Portable I2C interface
 header: common_iic_I.h
-invalidReturn: COMMON_IIC_INVALID_PARAM        # required for non-void functions
+invalidReturn: COMMON_IIC_INVALID_PARAM        # fallback for every non-void function
 uninitializedReturn: COMMON_IIC_NOT_INITIALIZED
+invalidReturns:                                # per-return-type defaults, beat the scalar above
+  flash_command_t: FLASH_COMMAND_NONE
+uninitializedReturns:
+  flash_command_t: FLASH_COMMAND_UNKNOWN
 includes: [<stdint.h>]
 
 enums:
@@ -113,7 +117,7 @@ functions:
     return: bool
     description: One-time module initialization
     parameters: []
-    invalidReturn: false        # required for non-void
+    invalidReturn: false        # per-function override
     visibility: public          # private (default) | public
 
 singleton: false

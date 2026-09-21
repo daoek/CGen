@@ -184,7 +184,10 @@ public final class ProjectService {
                 description: Portable %s interface
                 header: %s_I.h
 
-                # Used by generated wrappers when validation fails.
+                # Used by generated wrappers when validation fails. For a return type that -1 does
+                # not fit, key a default by type instead:
+                # invalidReturns:
+                #   flash_command_t: FLASH_COMMAND_NONE
                 invalidReturn: -1
                 uninitializedReturn: -2
 
@@ -266,7 +269,7 @@ public final class ProjectService {
                 #     return: bool
                 #     description: One-time module initialization
                 #     parameters: []
-                #     invalidReturn: false   # required for non-void return types
+                #     invalidReturn: false   # guard value for a non-void return type
                 #     visibility: public
                 functions: []
 

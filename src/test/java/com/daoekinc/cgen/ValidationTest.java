@@ -196,7 +196,75 @@ class ValidationTest {
     }
 
     @Test
-    void requiresExplicitErrorValueForNonVoidFunction() throws Exception {
+    void typeKeyedReturnDefaultsBeatScalarDefault() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("flash.interface.yaml"), """
+                kind: interface
+                name: flash
+                invalidReturn: -1
+                uninitializedReturn: -2
+                invalidReturns:
+                  flash_command_t: FLASH_COMMAND_NONE
+                uninitializedReturns:
+                  flash_command_t: FLASH_COMMAND_UNKNOWN
+                enums:
+                  - name: flash_command_t
+                    values:
+                      - { name: FLASH_COMMAND_NONE }
+                      - { name: FLASH_COMMAND_UNKNOWN }
+                functions:
+                  - name: generate_command
+                    return: flash_command_t
+                    parameters: []
+                  - name: read_status
+                    return: int32_t
+                    parameters: []
+                """);
+
+        assertEquals(0, cli.run("generate"));
+
+        String source = Files.readString(temporaryDirectory.resolve("flash_I.h"));
+        assertTrue(source.contains("flash_command_t cgen_result = FLASH_COMMAND_NONE;"));
+        assertTrue(source.contains("cgen_result = FLASH_COMMAND_UNKNOWN;"));
+        assertTrue(source.contains("int32_t cgen_result = -1;"));
+        assertTrue(source.contains("cgen_result = -2;"));
+    }
+
+    @Test
+    void structReturnUsesCompoundLiteralDefaults() throws Exception {
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("flash.interface.yaml"), """
+                kind: interface
+                name: flash
+                invalidReturn: -1
+                invalidReturns:
+                  flash_command_t: '(flash_command_t){0}'
+                includes: [<stdint.h>]
+                structs:
+                  - name: flash_command_t
+                    fields:
+                      - uint8_t opcode
+                      - uint32_t address
+                functions:
+                  - name: generate_command
+                    return: flash_command_t
+                    parameters: []
+                  - name: describe_command
+                    return: flash_status_t
+                    parameters: []
+                """);
+
+        assertEquals(0, cli.run("generate"));
+
+        String header = Files.readString(temporaryDirectory.resolve("flash_I.h"));
+        assertTrue(header.contains("flash_command_t cgen_result = (flash_command_t){0};"));
+        assertTrue(header.contains("flash_status_t cgen_result = -1;"));
+    }
+
+    @Test
+    void zeroInitializesInterfaceFunctionWithoutInvalidReturn() throws Exception {
         CliFixture cli = new CliFixture(temporaryDirectory);
         assertEquals(0, cli.run("init"));
         Files.writeString(temporaryDirectory.resolve("status.interface.yaml"), """
@@ -208,7 +276,7 @@ class ValidationTest {
                     parameters: []
                 """);
 
-        assertEquals(1, cli.run("generate"));
-        assertTrue(cli.errors().contains("invalidReturn is required for non-void function 'read'"));
+        assertEquals(0, cli.run("generate"));
+        assertTrue(Files.readString(temporaryDirectory.resolve("status_I.h")).contains("(uint32_t){0}"));
     }
 }

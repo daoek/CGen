@@ -49,11 +49,12 @@ public record ModuleSpec(
         String contextName = source.toString();
         Values.onlyKeys(yaml, contextName, "kind", "name", "description", "header", "source", "implements",
                 "includes", "enums", "context", "variables", "functions", "singleton", "instance", "singletonElse",
-                "externalEnums");
+                "externalEnums", "invalidReturn", "uninitializedReturn", "invalidReturns", "uninitializedReturns");
         if (!Values.requiredString(yaml, "kind", contextName).equals("module")) {
             throw new CGenException(contextName + ".kind must be module");
         }
         Values.CommonFields common = Values.commonFields(yaml, contextName, "module");
+        InterfaceSpec.ReturnDefaults returnDefaults = InterfaceSpec.ReturnDefaults.from(yaml, contextName);
         String name = common.name();
         List<InterfaceSpec.EnumDef> enums = InterfaceSpec.parseEnums(yaml, "enums", contextName);
         List<String> implemented = Values.stringList(yaml, "implements", contextName).stream()
@@ -105,7 +106,7 @@ public record ModuleSpec(
             if (visibility != Visibility.PUBLIC && visibility != Visibility.PRIVATE) {
                 throw new CGenException(itemContext + ".visibility must be public or private");
             }
-            functions.add(new Function(InterfaceSpec.parseFunctionItem(item, itemContext, null, null), visibility));
+            functions.add(new Function(InterfaceSpec.parseFunctionItem(item, itemContext, returnDefaults), visibility));
         }
         Values.uniqueNames(functions.stream().map(function -> function.spec().name()).toList(), contextName + ".functions");
 

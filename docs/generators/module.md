@@ -43,6 +43,8 @@ variables:
 | `context` | Fields of the generated `<name>_context_t` — the module's per-instance state. |
 | `variables` | Module-level variables. See [below](#variables). |
 | `functions` | Standalone functions, independent of any interface. See [below](#standalone-functions). |
+| `invalidReturn` / `uninitializedReturn` | Guard return value defaults for this module's own functions. |
+| `invalidReturns` / `uninitializedReturns` | The same defaults, keyed by return type. |
 | `singleton` | `true` generates a lazy-init instance accessor. See [below](#singleton). |
 | `singletonElse` | `true` adds an `else` branch to that accessor. |
 | `instance` | Renames the generated singleton accessor (default `<name>_instance`). |
@@ -189,8 +191,11 @@ Points worth knowing:
   yourself across the module's own functions and its implemented interfaces.
 - **No implicit context.** Unlike an interface function, no `void *context` first parameter is
   added. Take one as an explicit parameter if the function needs it.
-- **`invalidReturn` is required** for any non-`void` return type. There is no interface-level
-  default to fall back on here.
+- **`invalidReturn` resolves the same way as in an interface**: the function's own key, then the
+  module-level `invalidReturns` entry for the return type, then the module-level scalar
+  `invalidReturn`, then a zero initializer such as `(flash_command_t){0}`. `uninitializedReturn`
+  and `uninitializedReturns` work the same. See
+  [`invalidReturn` and `uninitializedReturn`](interface.md#invalidreturn-and-uninitializedreturn).
 - **`visibility`** is `private` (default — `static`, source only) or `public` (also declared in the
   header).
 

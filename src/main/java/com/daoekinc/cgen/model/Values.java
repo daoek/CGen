@@ -181,6 +181,27 @@ final class Values {
         return result;
     }
 
+    // A mapping of C type name to a one-line C expression, e.g.
+    //   invalidReturns:
+    //     flash_command_t: FLASH_COMMAND_NONE
+    static Map<String, String> stringMap(Map<String, Object> map, String key, String context) {
+        Map<String, String> result = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : optionalMap(map, key, context).entrySet()) {
+            String entryContext = context + "." + key + "." + entry.getKey();
+            if (entry.getKey().isBlank()) {
+                throw new CGenException(context + "." + key + " contains a blank key");
+            }
+            Map<String, Object> holder = new LinkedHashMap<>();
+            holder.put("value", entry.getValue());
+            String value = optionalString(holder, "value", null, entryContext);
+            if (value == null || value.isBlank()) {
+                throw new CGenException(entryContext + " must be a non-empty one-line C expression");
+            }
+            result.put(entry.getKey().strip(), InterfaceSpec.oneLineExpression(value, entryContext));
+        }
+        return Map.copyOf(result);
+    }
+
     record CommonFields(String name, String description, String header, String sourceFile,
                         List<String> includes, List<InterfaceSpec.Field> context) {
     }
