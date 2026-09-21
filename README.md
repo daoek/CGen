@@ -11,16 +11,23 @@ regeneration.
 
 ## Install
 
-Download [`install.ps1`](https://github.com/daoek/CGen/raw/main/scripts/install.ps1) and run it
-with the version you want:
+Windows: download [`install.ps1`](https://github.com/daoek/CGen/raw/main/scripts/install.ps1);
+Linux/macOS: download [`install.sh`](https://github.com/daoek/CGen/raw/main/scripts/install.sh).
+Run it with the version you want:
 
 ```powershell
-.\install.ps1 -Version 1.2.0
+.\install.ps1 -Version 0.1.0-beta.3
+```
+
+```console
+./install.sh --version 0.1.0-beta.3
 ```
 
 It downloads that [release](https://github.com/daoek/CGen/releases), verifies the jar against the
-published SHA-256 checksum, and installs into `%LOCALAPPDATA%\CGen` as your user — no admin
-rights, no Java or Maven needed. Open a new terminal afterwards:
+published SHA-256 checksum, and installs it per-user — no admin/`sudo` rights, no Maven or a clone
+of the repository needed **to install it**. Running the installed `CGen` does need a **Java 17+
+runtime** on `PATH`; both launchers check for it and say so clearly if it's missing. Open a new
+terminal afterwards:
 
 ```console
 CGen --help
