@@ -73,7 +73,10 @@ public final class TagHelper {
         String current = null;
         List<String> body = null;
         int depth = 0;
+        int lineNumber = 0;
         for (String line : content.split("\\R", -1)) {
+            lineNumber++;
+            requireNotOldSyntax(line, file, lineNumber);
             String beginName = CGenTag.userBeginName(line);
             boolean isEnd = CGenTag.isUserEnd(line);
             if (current == null) {
@@ -109,6 +112,30 @@ public final class TagHelper {
             throw new CGenException("Unclosed user region '" + current + "' in " + file);
         }
         return regions;
+    }
+
+    /**
+     * Refuses a file still using the pre-migration "/*@CGen(+name)*&#47; ... /*@CGen(-name)*&#47;"
+     * region syntax. The current parser does not recognize those lines as region boundaries at
+     * all - left unchecked, {@link #extract} would silently treat the whole region as ordinary
+     * generated text, the code inside would never be captured, and the next {@code generate}
+     * would overwrite it with nothing written back. Failing loudly here, before any region is
+     * even parsed, is the only way to guarantee that never happens; unlike an automatic migration,
+     * it never has to guess where a hand-written old-syntax region actually ends.
+     */
+    private static void requireNotOldSyntax(String line, Path file, int lineNumber) {
+        String beginName = CGenTag.oldUserBeginName(line);
+        String endName = CGenTag.oldUserEndName(line);
+        String name = beginName != null ? beginName : endName;
+        if (name == null) {
+            return;
+        }
+        throw new CGenException(file + ":" + lineNumber + ": found the old user-region marker syntax "
+                + "'/*@CGen(+" + name + ")*/ ... /*@CGen(-" + name + ")*/', which this version of CGen no longer "
+                + "parses. Regenerating as-is would silently discard everything inside it.",
+                "Fix it by", "changing just this region's two marker lines by hand to the current syntax - "
+                        + "'/*@CGen usercode+ " + name + "*/' and '/*@CGen usercode-*/' - keeping the code "
+                        + "between them exactly as it is, then running generate again.");
     }
 
     private static void writeAtomic(Path output, String content) {

@@ -10,6 +10,14 @@ public final class CGenTag {
     private static final Pattern MARKER = Pattern.compile("^\\s*(?:'\\s*)?/\\*@CGen\\(([^)]*)\\)\\*/\\s*$");
     private static final Pattern USER_BEGIN = Pattern.compile("^\\s*/\\*@CGen usercode\\+ (\\S+)\\*/\\s*$");
     private static final Pattern USER_END = Pattern.compile("^\\s*/\\*@CGen usercode-\\*/\\s*$");
+    // The pre-migration user-region syntax ("/*@CGen(+name)*/ ... /*@CGen(-name)*/"), replaced
+    // project-wide by usercode+/usercode- before CGen 1.0. No current renderer emits this, but a
+    // file written by that old version and never regenerated since would still have it on disk -
+    // see TagHelper's use of these, which refuses to touch such a file rather than silently
+    // discarding what's inside it (extract() otherwise treats an unrecognized marker line as
+    // plain body text, i.e. as if the region never existed).
+    private static final Pattern OLD_USER_BEGIN = Pattern.compile("^\\s*/\\*@CGen\\(\\+(\\S+)\\)\\*/\\s*$");
+    private static final Pattern OLD_USER_END = Pattern.compile("^\\s*/\\*@CGen\\(-(\\S+)\\)\\*/\\s*$");
 
     private CGenTag() {
     }
@@ -42,6 +50,18 @@ public final class CGenTag {
 
     public static boolean isUserEnd(String line) {
         return USER_END.matcher(line).matches();
+    }
+
+    /** The region name from an old-syntax "/*@CGen(+name)*&#47;" begin line, or null. */
+    public static String oldUserBeginName(String line) {
+        Matcher matcher = OLD_USER_BEGIN.matcher(line);
+        return matcher.matches() ? matcher.group(1) : null;
+    }
+
+    /** The region name from an old-syntax "/*@CGen(-name)*&#47;" end line, or null. */
+    public static String oldUserEndName(String line) {
+        Matcher matcher = OLD_USER_END.matcher(line);
+        return matcher.matches() ? matcher.group(1) : null;
     }
 
     private static String payload(String line) {

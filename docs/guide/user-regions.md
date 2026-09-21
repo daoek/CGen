@@ -133,6 +133,16 @@ When you genuinely want that file replaced, pass
 [`--force`](../reference/cli.md#cgen-generate) — and check the file into version control first,
 because its content is gone afterwards.
 
+!!! danger "A file using the old `/*@CGen(+name)*/` region syntax"
+
+    Versions before the `usercode+`/`usercode-` syntax above wrote regions as
+    `/*@CGen(+name)*/ ... /*@CGen(-name)*/`. The current parser does not recognize that shape as a
+    region at all, so `generate` **refuses** a file that still has it, naming the file and line,
+    rather than silently discarding what's inside — `--force` does not bypass this refusal either,
+    since the file is a recognized CGen file, just an outdated one. Fix it by hand: change that
+    region's two marker lines to the current syntax, keeping the code between them exactly as it
+    is, then run `generate` again.
+
 ## Detaching permanently
 
 To remove CGen from a project for good:
