@@ -1,0 +1,4 @@
+# Shell scripts must always check out with LF - a CRLF line ending breaks a POSIX shebang line
+# and can break shell syntax outright (heredocs, case statements) on Linux/macOS, regardless of
+# what core.autocrlf a contributor's machine (this one included) happens to have set.
+*.sh text eol=lf
