@@ -1,4 +1,6 @@
-<img src="docs/assets/logo.svg" width="64" height="64" alt="Pinfit logo: a pin clicking into a socket">
+<p align="center">
+  <img src="docs/assets/logo.svg" width="120" height="120" alt="Pinfit logo: a pin clicking into a socket">
+</p>
 
 # Pinfit
 
