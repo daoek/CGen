@@ -1,4 +1,4 @@
-/* CGen documentation — small refinements on top of Material defaults. */
+/* Pinfit documentation — small refinements on top of Material defaults. */
 
 :root {
   --md-code-font: "JetBrains Mono", "Cascadia Code", "SFMono-Regular", Consolas,
@@ -6,7 +6,7 @@
 }
 
 /* Landing page hero. */
-.cgen-hero {
+.pinfit-hero {
   border: 1px solid var(--md-default-fg-color--lightest);
   border-radius: 0.5rem;
   padding: 1.6rem 1.6rem 1.2rem;
@@ -14,12 +14,12 @@
   background: var(--md-code-bg-color);
 }
 
-.cgen-hero h2 {
+.pinfit-hero h2 {
   margin-top: 0;
   font-weight: 700;
 }
 
-.cgen-hero p:last-child {
+.pinfit-hero p:last-child {
   margin-bottom: 0;
 }
 

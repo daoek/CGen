@@ -4,7 +4,7 @@ Fans a single call out to every subscriber implementing an existing [interface](
 Fixed capacity, no allocation, no user code — the fan-out is entirely mechanical.
 
 ```console
-CGen create observer button_events --interface button_listener --capacity 8
+pinfit create observer button_events --interface button_listener --capacity 8
 ```
 
 ## Spec
@@ -28,7 +28,7 @@ context: []
 !!! warning "The listener interface must return `void`"
 
     Every function on the referenced interface has to return `void`. There is no sensible way to
-    aggregate N subscriber return values into one, so CGen rejects the spec instead of picking a
+    aggregate N subscriber return values into one, so Pinfit rejects the spec instead of picking a
     rule for you.
 
     If a subscriber needs to report something back, give it a separate interface that the publisher
@@ -60,14 +60,14 @@ same parameters.
 ```c
 bool button_events_subscribe(button_events_context_t *context, const button_listener_interface_t *subscriber)
 {
-    bool cgen_result = false;
+    bool pinfit_result = false;
 
     if ((subscriber != NULL) && (context->count < BUTTON_EVENTS_CAPACITY))
     {
         /* ... reject a duplicate, then append ... */
     }
 
-    return cgen_result;
+    return pinfit_result;
 }
 ```
 

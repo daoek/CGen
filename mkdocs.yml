@@ -1,16 +1,19 @@
-site_name: CGen
-site_description: YAML-driven C interface and module generator with regeneration-safe user code regions.
-site_url: https://daoek.github.io/CGen/
-repo_url: https://github.com/daoek/CGen
-repo_name: daoek/CGen
+site_name: Pinfit
+site_description: >-
+  Pinfit: define C interfaces in YAML, make every module fit. A YAML-driven C interface and
+  module generator with regeneration-safe user code regions.
+site_url: https://daoek.github.io/Pinfit/
+repo_url: https://github.com/daoek/Pinfit
+repo_name: daoek/Pinfit
 edit_uri: edit/main/docs/
 copyright: Copyright &copy; Daoek Inc.
 
 theme:
   name: material
   language: en
+  logo: assets/logo.svg
+  favicon: assets/logo.svg
   icon:
-    logo: material/chip
     repo: fontawesome/brands/github
   palette:
     - media: "(prefers-color-scheme)"
@@ -53,8 +56,8 @@ extra_css:
 extra:
   social:
     - icon: fontawesome/brands/github
-      link: https://github.com/daoek/CGen
-      name: CGen on GitHub
+      link: https://github.com/daoek/Pinfit
+      name: Pinfit on GitHub
 
 markdown_extensions:
   - abbr
@@ -97,7 +100,7 @@ nav:
   - Guide:
       - Project configuration: guide/project-configuration.md
       - User regions and regeneration: guide/user-regions.md
-      - "@CGenSwitch": guide/cgenswitch.md
+      - "@PinfitSwitch": guide/pinfitswitch.md
       - Nested projects: guide/nested-projects.md
       - MISRA-oriented output: guide/misra.md
       - Editor snippets: guide/editor-snippets.md

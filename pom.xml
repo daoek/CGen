@@ -4,10 +4,10 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>com.daoekinc</groupId>
-  <artifactId>cgen</artifactId>
+  <artifactId>pinfit</artifactId>
   <version>1.0-SNAPSHOT</version>
 
-  <name>CGen</name>
+  <name>Pinfit</name>
   <!-- FIXME change it to the project's website -->
   <url>http://www.example.com</url>
 
@@ -69,7 +69,7 @@
               <createDependencyReducedPom>false</createDependencyReducedPom>
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>com.daoekinc.cgen.App</mainClass>
+                  <mainClass>com.daoekinc.pinfit.App</mainClass>
                 </transformer>
               </transformers>
             </configuration>

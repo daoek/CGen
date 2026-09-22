@@ -5,7 +5,7 @@ depends on what happened before — a door, a protocol handshake, a motor contro
 sequence.
 
 ```console
-CGen create state-machine door
+pinfit create state-machine door
 ```
 
 ## Spec
@@ -83,11 +83,11 @@ event, taking the context plus whatever `parameters` you declared.
 Each state gets a pair of generated `static` hook functions, each with its own user region:
 
 ```c
-/*@CGen usercode+ state.OPEN.entry*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ state.OPEN.entry*/
+/*@Pinfit usercode-*/
 
-/*@CGen usercode+ state.OPEN.exit*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ state.OPEN.exit*/
+/*@Pinfit usercode-*/
 ```
 
 These run on every transition into or out of the state, however it was reached — through an event
@@ -98,24 +98,24 @@ or through `door_go_to_state()`.
 ```c title="door.c"
 void door_on_OPEN_REQUEST(door_context_t *context)
 {
-    bool cgen_transitioned = false;
+    bool pinfit_transitioned = false;
 
     switch (context->state)
     {
         case DOOR_STATE_CLOSED:
         {
-            bool cgen_guard = true;
+            bool pinfit_guard = true;
 
-            /*@CGen usercode+ transition.CLOSED.OPEN_REQUEST.guard*/
-            /*@CGen usercode-*/
-            if (cgen_guard)
+            /*@Pinfit usercode+ transition.CLOSED.OPEN_REQUEST.guard*/
+            /*@Pinfit usercode-*/
+            if (pinfit_guard)
             {
                 door_exit_CLOSED(context);
-                /*@CGen usercode+ transition.CLOSED.OPEN_REQUEST.action*/
-                /*@CGen usercode-*/
+                /*@Pinfit usercode+ transition.CLOSED.OPEN_REQUEST.action*/
+                /*@Pinfit usercode-*/
                 context->state = DOOR_STATE_OPEN;
                 door_enter_OPEN(context);
-                cgen_transitioned = true;
+                pinfit_transitioned = true;
             }
             break;
         }
@@ -123,21 +123,21 @@ void door_on_OPEN_REQUEST(door_context_t *context)
             break;
     }
 
-    if (!cgen_transitioned)
+    if (!pinfit_transitioned)
     {
-        /*@CGen usercode+ event.OPEN_REQUEST.unhandled*/
-        /*@CGen usercode-*/
+        /*@Pinfit usercode+ event.OPEN_REQUEST.unhandled*/
+        /*@Pinfit usercode-*/
     }
 }
 ```
 
-- **`guard`** — with `guard: true`, `cgen_guard` starts as `true` and you may overwrite it in
+- **`guard`** — with `guard: true`, `pinfit_guard` starts as `true` and you may overwrite it in
   `transition.<from>.<event>.guard`:
 
   ```c
-  /*@CGen usercode+ transition.CLOSED.OPEN_REQUEST.guard*/
-  cgen_guard = (context->open_count < MAX_CYCLES);
-  /*@CGen usercode-*/
+  /*@Pinfit usercode+ transition.CLOSED.OPEN_REQUEST.guard*/
+  pinfit_guard = (context->open_count < MAX_CYCLES);
+  /*@Pinfit usercode-*/
   ```
 
 - **`action`** — `transition.<from>.<event>.action` runs between the exit hook and the state
@@ -158,12 +158,12 @@ per-state region — `state.<STATE>.tick` — where you write whatever runs cont
 state: polling, timers, sensor reads, and conditional moves elsewhere, in plain C:
 
 ```c
-/*@CGen usercode+ state.RUNNING.tick*/
+/*@Pinfit usercode+ state.RUNNING.tick*/
 if (getMotorSpeed() > 100.0f)
 {
     door_go_to_state(context, DOOR_STATE_FAULT);
 }
-/*@CGen usercode-*/
+/*@Pinfit usercode-*/
 ```
 
 ## `_go_to_state()` — the transition primitive
@@ -211,14 +211,14 @@ int main(void)
 | `state.<STATE>.entry` | On every entry into the state |
 | `state.<STATE>.exit` | On every exit from the state |
 | `state.<STATE>.tick` | On every `_tick()` while in the state |
-| `transition.<from>.<event>.guard` | Before the transition, to set `cgen_guard` |
+| `transition.<from>.<event>.guard` | Before the transition, to set `pinfit_guard` |
 | `transition.<from>.<event>.action` | Between exit hook and state assignment |
 | `event.<EVENT>.unhandled` | When no transition fired |
 
 ## The statesmith engine
 
 The builtin engine above is flat: one state, one level. For **hierarchical** states - a composite
-state with its own sub-states, where a parent transition covers every child - CGen can drive
+state with its own sub-states, where a parent transition covers every child - Pinfit can drive
 [StateSmith](https://github.com/StateSmith/StateSmith) (Apache-2.0) instead of implementing a
 state-machine compiler itself. Choose it when a state naturally decomposes into modes with shared
 behaviour (an `OPERATING` mode with `OPENING`/`OPEN`/`CLOSING` sub-states that all react the same
@@ -229,23 +229,23 @@ install and no extra generated files.
 
 ```
 door.state-machine.yaml   you author this - the single source of truth
-door.h  door.c            CGen-owned public API (same shape as the builtin engine's, minus go_to_state)
-door_hooks.h  door_hooks.c CGen-owned - every line of your code lives here, in usercode regions
+door.h  door.c            Pinfit-owned public API (same shape as the builtin engine's, minus go_to_state)
+door_hooks.h  door_hooks.c Pinfit-owned - every line of your code lives here, in usercode regions
 door_sm/                  entirely StateSmith's - never hand-edited
-  door_sm.plantuml          CGen-generated input (kept by `detach`, as documentation)
+  door_sm.plantuml          Pinfit-generated input (kept by `detach`, as documentation)
   door_sm.h  door_sm.c       StateSmith-generated state-machine logic
   door_sm.sim.html           StateSmith's browser simulator for this diagram
 ```
 
-`generate` writes the CGen-owned files, then runs `ss.cli` on the `.plantuml` it just wrote.
+`generate` writes the Pinfit-owned files, then runs `ss.cli` on the `.plantuml` it just wrote.
 `ss.cli` never runs, and is never required, in a project with no `engine: statesmith` machine.
 
 ### Install and version pinning
 
-Install StateSmith's CLI (`ss.cli`) yourself - CGen never downloads or bundles it - then pin the
-version in `cgen.yaml`:
+Install StateSmith's CLI (`ss.cli`) yourself - Pinfit never downloads or bundles it - then pin the
+version in `pinfit.yaml`:
 
-```yaml title="cgen.yaml"
+```yaml title="pinfit.yaml"
 stateSmith:
   command: ss.cli  # or a full path
   version: 0.22.2  # generate fails with a clear message on a mismatch
@@ -297,7 +297,7 @@ transitions:
 on a composite exactly when something enters it directly - the machine's own `initial`, or a
 transition's `to` - naming one of that composite's *direct* children (nested composites resolve
 their own initial the same way, recursively). A transition's `from` may name a composite too: it
-then applies to every one of its children, StateSmith's native behaviour - no CGen-specific syntax
+then applies to every one of its children, StateSmith's native behaviour - no Pinfit-specific syntax
 needed.
 
 State and event names must be unique across the *whole* hierarchy, same as `(from, event)` pairs
@@ -363,9 +363,9 @@ void door_on_MOTOR_FAULT(door_context_t *context, uint32_t code)
 ```c title="door_hooks.c"
 void door_hook_transition_OPERATING_MOTOR_FAULT_action(door_context_t *context)
 {
-    /*@CGen usercode+ transition.OPERATING.MOTOR_FAULT.action*/
+    /*@Pinfit usercode+ transition.OPERATING.MOTOR_FAULT.action*/
     log_fault_code(context->event_args.MOTOR_FAULT.code);
-    /*@CGen usercode-*/
+    /*@Pinfit usercode-*/
 }
 ```
 
@@ -380,11 +380,11 @@ for `guard`/`action` - all in `door_hooks.h/.c`, all non-`static` (StateSmith's 
 | `state.<STATE>.entry` | On every entry into the state (leaf or composite) |
 | `state.<STATE>.exit` | On every exit from the state |
 | `state.<STATE>.tick` | On every `do` dispatch while the state is active |
-| `transition.<from>.<event>.guard` | Before the transition, to set `cgen_guard` |
+| `transition.<from>.<event>.guard` | Before the transition, to set `pinfit_guard` |
 | `transition.<from>.<event>.action` | Between the exit hook and the state assignment |
 
 **Region names are identical to the builtin engine's.** Switching an existing state machine from
-`engine: builtin` to `engine: statesmith` (same state names) keeps every user region: CGen carries
+`engine: builtin` to `engine: statesmith` (same state names) keeps every user region: Pinfit carries
 region content across regeneration by name, regardless of which engine wrote the file it came from.
 
 ### No `go_to_state()`
@@ -417,11 +417,11 @@ int main(void)
 
 ### MISRA
 
-StateSmith-generated code (`door_sm.h/.c`) is outside CGen's [MISRA](../guide/misra.md) claims -
+StateSmith-generated code (`door_sm.h/.c`) is outside Pinfit's [MISRA](../guide/misra.md) claims -
 it comes from a separate tool with its own coding style, and needs its own review and deviations
 if your project requires one.
 
 ## See also
 
 - [Command table](command-table.md) — dispatch on an opcode rather than on a state.
-- [`@CGenSwitch`](../guide/cgenswitch.md) — exhaustive switches inside a tick region.
+- [`@PinfitSwitch`](../guide/pinfitswitch.md) — exhaustive switches inside a tick region.

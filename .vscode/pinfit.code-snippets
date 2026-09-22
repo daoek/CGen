@@ -1,0 +1,138 @@
+{
+    "Pinfit: enum": {
+        "scope": "yaml",
+        "prefix": "pinfit-enum",
+        "description": "Pinfit enum entry (interface or module)",
+        "body": [
+            "- name: ${1:mode_t}",
+            "  description: ${2:Operating mode}",
+            "  values:",
+            "    - { name: ${3:MODE_OFF}, value: ${4:0} }",
+            "    - { name: ${5:MODE_ON} }$0"
+        ]
+    },
+    "Pinfit: enum value": {
+        "scope": "yaml",
+        "prefix": "pinfit-enum-value",
+        "description": "Pinfit enum value line",
+        "body": "- { name: ${1:NAME}, value: ${2:0} }$0"
+    },
+    "Pinfit: struct": {
+        "scope": "yaml",
+        "prefix": "pinfit-struct",
+        "description": "Pinfit struct entry (interface)",
+        "body": [
+            "- name: ${1:config_t}",
+            "  description: ${2:Configuration}",
+            "  fields:",
+            "    - ${3:uint32_t} ${4:value}$0"
+        ]
+    },
+    "Pinfit: field (compact)": {
+        "scope": "yaml",
+        "prefix": "pinfit-field",
+        "description": "Pinfit compact \"type name\" field/context/parameter line",
+        "body": "- ${1:uint32_t} ${2:name}$0"
+    },
+    "Pinfit: field (map form)": {
+        "scope": "yaml",
+        "prefix": "pinfit-field-full",
+        "description": "Pinfit field with a description",
+        "body": "- { type: ${1:uint32_t}, name: ${2:name}, description: ${3:What it holds} }$0"
+    },
+    "Pinfit: interface function": {
+        "scope": "yaml",
+        "prefix": "pinfit-function-interface",
+        "description": "Pinfit interface function entry",
+        "body": [
+            "- name: ${1:write}",
+            "  return: ${2:common_iic_status_t}",
+            "  description: ${3:Write bytes}",
+            "  parameters:",
+            "    - ${4:const uint8_t *}${5:data}$0"
+        ]
+    },
+    "Pinfit: module function": {
+        "scope": "yaml",
+        "prefix": "pinfit-function-module",
+        "description": "Pinfit module standalone function entry",
+        "body": [
+            "- name: ${1:initialize}",
+            "  return: ${2:bool}",
+            "  description: ${3:One-time initialization}",
+            "  parameters: []",
+            "  invalidReturn: ${4:false}",
+            "  visibility: ${5|private,public|}$0"
+        ]
+    },
+    "Pinfit: parameter": {
+        "scope": "yaml",
+        "prefix": "pinfit-parameter",
+        "description": "Pinfit compact function parameter line",
+        "body": "- ${1:uint32_t} ${2:value}$0"
+    },
+    "Pinfit: module variable (compact)": {
+        "scope": "yaml",
+        "prefix": "pinfit-variable",
+        "description": "Pinfit module variable, compact form (leave 3rd field blank for private)",
+        "body": "- ${1:uint32_t} ${2:name}${3| public, get, set|}$0"
+    },
+    "Pinfit: module variable (full)": {
+        "scope": "yaml",
+        "prefix": "pinfit-variable-full",
+        "description": "Pinfit module variable with visibility/initial/description",
+        "body": "- { type: ${1:bool}, name: ${2:busy}, visibility: ${3|private,public,get,set|}, initial: '${4:false}', description: ${5:What it tracks} }$0"
+    },
+    "Pinfit: state": {
+        "scope": "yaml",
+        "prefix": "pinfit-state",
+        "description": "Pinfit state-machine state entry",
+        "body": "- { name: ${1:RUNNING}, description: ${2:In progress} }$0"
+    },
+    "Pinfit: event": {
+        "scope": "yaml",
+        "prefix": "pinfit-event",
+        "description": "Pinfit state-machine event entry",
+        "body": [
+            "- name: ${1:START}",
+            "  description: ${2:Begin running}",
+            "  parameters: []$0"
+        ]
+    },
+    "Pinfit: transition": {
+        "scope": "yaml",
+        "prefix": "pinfit-transition",
+        "description": "Pinfit state-machine transition entry",
+        "body": "- { from: ${1:IDLE}, event: ${2:START}, to: ${3:RUNNING}, guard: ${4:false}, description: ${5:Start the run} }$0"
+    },
+    "Pinfit: command": {
+        "scope": "yaml",
+        "prefix": "pinfit-command",
+        "description": "Pinfit command-table command entry",
+        "body": "- { name: ${1:PING}, opcode: ${2:0}, description: ${3:Respond with a heartbeat} }$0"
+    },
+    "Pinfit: status code": {
+        "scope": "yaml",
+        "prefix": "pinfit-code",
+        "description": "Pinfit status-codes code entry",
+        "body": "- { name: ${1:NOT_READY}, value: ${2:-1}, description: ${3:Not ready} }$0"
+    },
+    "Pinfit: adapter mapping": {
+        "scope": "yaml",
+        "prefix": "pinfit-mapping",
+        "description": "Pinfit adapter function mapping entry",
+        "body": "- { from: ${1:write}, to: ${2:send} }$0"
+    },
+    "Pinfit: system include": {
+        "scope": "yaml",
+        "prefix": "pinfit-include-system",
+        "description": "Pinfit <system.h> include entry",
+        "body": "<${1:stdint.h}>$0"
+    },
+    "Pinfit: local include": {
+        "scope": "yaml",
+        "prefix": "pinfit-include-local",
+        "description": "Pinfit \"local.h\" include entry (single-quoted in YAML so the double quotes survive)",
+        "body": "'\"${1:vendor.h}\"'$0"
+    }
+}

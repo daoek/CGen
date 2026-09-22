@@ -4,14 +4,14 @@ A standalone, **header-only** shared status enum plus checking macros. One error
 whole project, with no source file and nothing to link.
 
 ```console
-CGen create status-codes cgen_status
+pinfit create status-codes pinfit_status
 ```
 
 ## Spec
 
-```yaml title="cgen_status.status-codes.yaml"
+```yaml title="pinfit_status.status-codes.yaml"
 kind: status-codes
-name: cgen_status
+name: pinfit_status
 description: Shared status codes
 includes: []
 
@@ -28,26 +28,26 @@ codes:
 
 ## Generated output
 
-```c title="cgen_status.h"
-/*@CGen(enum:cgen_status)*/
+```c title="pinfit_status.h"
+/*@Pinfit(enum:pinfit_status)*/
 /** @brief Shared status codes */
 typedef enum
 {
-    CGEN_STATUS_OK = 0,
-    CGEN_STATUS_INVALID_PARAM = -1,
-    CGEN_STATUS_NOT_READY = -2
-} cgen_status_t;
+    PINFIT_STATUS_OK = 0,
+    PINFIT_STATUS_INVALID_PARAM = -1,
+    PINFIT_STATUS_NOT_READY = -2
+} pinfit_status_t;
 
-/*@CGen(macro:CGEN_STATUS_SUCCEEDED)*/
-#define CGEN_STATUS_SUCCEEDED(status) ((status) == CGEN_STATUS_OK)
+/*@Pinfit(macro:PINFIT_STATUS_SUCCEEDED)*/
+#define PINFIT_STATUS_SUCCEEDED(status) ((status) == PINFIT_STATUS_OK)
 
-/*@CGen(macro:CGEN_STATUS_FAILED)*/
-#define CGEN_STATUS_FAILED(status) (!CGEN_STATUS_SUCCEEDED(status))
+/*@Pinfit(macro:PINFIT_STATUS_FAILED)*/
+#define PINFIT_STATUS_FAILED(status) (!PINFIT_STATUS_SUCCEEDED(status))
 
-/*@CGen(macro:CGEN_STATUS_CHECK)*/
-#define CGEN_STATUS_CHECK(status_expression) \
-    do { cgen_status_t cgen_status = (status_expression); \
-        if (CGEN_STATUS_FAILED(cgen_status)) { return cgen_status; } \
+/*@Pinfit(macro:PINFIT_STATUS_CHECK)*/
+#define PINFIT_STATUS_CHECK(status_expression) \
+    do { pinfit_status_t pinfit_status = (status_expression); \
+        if (PINFIT_STATUS_FAILED(pinfit_status)) { return pinfit_status; } \
     } while (0)
 ```
 
@@ -57,44 +57,44 @@ set (`driver_status`, say) generates `DRIVER_STATUS_SUCCEEDED` and friends witho
 ## Using it
 
 ```c
-#include "cgen_status.h"
+#include "pinfit_status.h"
 
-static cgen_status_t configure_sensor(sensor_t *sensor)
+static pinfit_status_t configure_sensor(sensor_t *sensor)
 {
-    CGEN_STATUS_CHECK(sensor_reset(sensor));       /* (1)! */
-    CGEN_STATUS_CHECK(sensor_set_rate(sensor, 100U));
+    PINFIT_STATUS_CHECK(sensor_reset(sensor));       /* (1)! */
+    PINFIT_STATUS_CHECK(sensor_set_rate(sensor, 100U));
 
-    return CGEN_STATUS_OK;
+    return PINFIT_STATUS_OK;
 }
 
 void caller(void)
 {
-    if (CGEN_STATUS_FAILED(configure_sensor(&sensor)))
+    if (PINFIT_STATUS_FAILED(configure_sensor(&sensor)))
     {
         /* report it */
     }
 }
 ```
 
-1.  `CGEN_STATUS_CHECK` returns the failing status straight to the caller, so the happy path stays
+1.  `PINFIT_STATUS_CHECK` returns the failing status straight to the caller, so the happy path stays
     readable. Note that it *does* return early — see the note below.
 
-!!! note "`CGEN_STATUS_CHECK` and single-exit rules"
+!!! note "`PINFIT_STATUS_CHECK` and single-exit rules"
 
-    The macro contains a `return`, which conflicts with the strict single-point-of-exit style CGen's
+    The macro contains a `return`, which conflicts with the strict single-point-of-exit style Pinfit's
     own [generated code follows](../guide/misra.md). It is a convenience for your code, not
-    something CGen emits into a generated function body. In a project that enforces single exit,
-    use `CGEN_STATUS_FAILED` with an explicit `cgen_result` assignment instead:
+    something Pinfit emits into a generated function body. In a project that enforces single exit,
+    use `PINFIT_STATUS_FAILED` with an explicit `pinfit_result` assignment instead:
 
     ```c
-    cgen_status_t cgen_result = sensor_reset(sensor);
+    pinfit_status_t pinfit_result = sensor_reset(sensor);
 
-    if (CGEN_STATUS_SUCCEEDED(cgen_result))
+    if (PINFIT_STATUS_SUCCEEDED(pinfit_result))
     {
-        cgen_result = sensor_set_rate(sensor, 100U);
+        pinfit_result = sensor_set_rate(sensor, 100U);
     }
 
-    return cgen_result;
+    return pinfit_result;
     ```
 
 ## Relationship to `invalidReturn`
@@ -108,13 +108,13 @@ What it does give you is something sensible to point them at:
 ```yaml title="bus.interface.yaml"
 kind: interface
 name: bus
-includes: ['"cgen_status.h"']
-invalidReturn: CGEN_STATUS_INVALID_PARAM
-uninitializedReturn: CGEN_STATUS_NOT_READY
+includes: ['"pinfit_status.h"']
+invalidReturn: PINFIT_STATUS_INVALID_PARAM
+uninitializedReturn: PINFIT_STATUS_NOT_READY
 
 functions:
   - name: write
-    return: cgen_status_t
+    return: pinfit_status_t
     parameters:
       - const uint8_t *data
       - uint32_t length

@@ -4,7 +4,7 @@ A generic UART, CLI or wire-protocol opcode dispatcher: one enum, one `dispatch`
 handler with its own user region per command.
 
 ```console
-CGen create command-table uart_cmd
+pinfit create command-table uart_cmd
 ```
 
 ## Spec
@@ -68,18 +68,18 @@ the struct stays valid C.
 `dispatch` switches on the opcode into one `static` handler per command:
 
 ```c title="uart_cmd.c"
-/*@CGen(private-function:uart_cmd_handle_PING)*/
+/*@Pinfit(private-function:uart_cmd_handle_PING)*/
 static void uart_cmd_handle_PING(uart_cmd_context_t *context, const uint8_t *payload, uint32_t length)
 {
     (void)context;
     (void)payload;
     (void)length;
 
-    /*@CGen usercode+ command.PING.body*/
-    /*@CGen usercode-*/
+    /*@Pinfit usercode+ command.PING.body*/
+    /*@Pinfit usercode-*/
 }
 
-/*@CGen(function:uart_cmd_dispatch)*/
+/*@Pinfit(function:uart_cmd_dispatch)*/
 void uart_cmd_dispatch(uart_cmd_context_t *context, uart_cmd_command_t command, const uint8_t *payload, uint32_t length)
 {
     switch (command)
@@ -94,8 +94,8 @@ void uart_cmd_dispatch(uart_cmd_context_t *context, uart_cmd_command_t command, 
 
         default:
         {
-            /*@CGen usercode+ command.unknown*/
-            /*@CGen usercode-*/
+            /*@Pinfit usercode+ command.unknown*/
+            /*@Pinfit usercode-*/
             break;
         }
     }

@@ -1,8 +1,8 @@
 # Generators
 
 Every spec file starts with a `kind:` that selects one of seven generators. All of them are
-scaffolded by [`CGen create`](../reference/cli.md#cgen-create) and produced by the same
-`CGen generate` run, and all of them write their output next to the YAML that describes them.
+scaffolded by [`pinfit create`](../reference/cli.md#pinfit-create) and produced by the same
+`pinfit generate` run, and all of them write their output next to the YAML that describes them.
 
 ## Choosing one
 
@@ -76,13 +76,13 @@ scaffolded by [`CGen create`](../reference/cli.md#cgen-create) and produced by t
 
 | Kind | `create` command | Output | Cross-references | User regions |
 | --- | --- | --- | --- | --- |
-| `interface` | `CGen create interface <name> [dir]` | header | — | 3 |
-| `module` | `CGen create module <name> [dir] --implements <i>` | header + source | interfaces | one per function, plus file-level |
-| `state-machine` | `CGen create state-machine <name> [dir] [--engine statesmith]` | header + source (+ `_hooks.h/.c` and `_sm/` with `engine: statesmith`) | — | per state, transition and event |
-| `observer` | `CGen create observer <name> --interface <i> [dir]` | header + source | one interface | none |
-| `command-table` | `CGen create command-table <name> [dir]` | header + source | — | one per command, plus `command.unknown` |
-| `status-codes` | `CGen create status-codes <name> [dir]` | header | — | none |
-| `adapter` | `CGen create adapter <name> --from <i> --to <i> [dir]` | header + source | two interfaces | one per unmapped function |
+| `interface` | `pinfit create interface <name> [dir]` | header | — | 3 |
+| `module` | `pinfit create module <name> [dir] --implements <i>` | header + source | interfaces | one per function, plus file-level |
+| `state-machine` | `pinfit create state-machine <name> [dir] [--engine statesmith]` | header + source (+ `_hooks.h/.c` and `_sm/` with `engine: statesmith`) | — | per state, transition and event |
+| `observer` | `pinfit create observer <name> --interface <i> [dir]` | header + source | one interface | none |
+| `command-table` | `pinfit create command-table <name> [dir]` | header + source | — | one per command, plus `command.unknown` |
+| `status-codes` | `pinfit create status-codes <name> [dir]` | header | — | none |
+| `adapter` | `pinfit create adapter <name> --from <i> --to <i> [dir]` | header + source | two interfaces | one per unmapped function |
 
 ## Shared conventions
 

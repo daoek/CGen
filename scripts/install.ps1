@@ -1,5 +1,5 @@
 <#
-    Installs CGen into a per-user directory (default %LOCALAPPDATA%\CGen). No admin rights
+    Installs Pinfit into a per-user directory (default %LOCALAPPDATA%\Pinfit). No admin rights
     are required and nothing outside the install directory is touched, other than adding that
     directory to the current user's PATH.
 
@@ -9,7 +9,7 @@
         SHA256SUMS from GitHub over HTTPS, verify the checksum, and install only if it matches.
         Nothing is written to the install directory if verification fails.
       - Omit -Version to build from the local checkout instead (`mvn clean package`), which is
-        what the "CGen: Package + Install" VS Code task and contributors use.
+        what the "Pinfit: Package + Install" VS Code task and contributors use.
 
     A note on -ExecutionPolicy Bypass, since it shows up in the recommended invocation: that
     flag scopes to the single powershell.exe process it's passed to. It does not change the
@@ -18,7 +18,7 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'CGen'),
+    [string]$InstallDirectory = (Join-Path $env:LOCALAPPDATA 'Pinfit'),
     [string]$Version,
     [switch]$SkipBuild,
     [switch]$SkipPathUpdate
@@ -32,10 +32,10 @@ if ($Version -and $SkipBuild) {
 }
 
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-$repositorySlug = 'daoek/CGen'
+$repositorySlug = 'daoek/Pinfit'
 $resolvedInstallDirectory = [System.IO.Path]::GetFullPath($InstallDirectory)
 $pathRoot = [System.IO.Path]::GetPathRoot($resolvedInstallDirectory)
-$markerName = '.cgen-install-marker'
+$markerName = '.pinfit-install-marker'
 $markerPath = Join-Path $resolvedInstallDirectory $markerName
 
 if ($resolvedInstallDirectory -eq $pathRoot -or
@@ -47,7 +47,7 @@ if ($resolvedInstallDirectory -eq $pathRoot -or
 if (Test-Path -LiteralPath $resolvedInstallDirectory) {
     $hasContent = (Get-ChildItem -Force -LiteralPath $resolvedInstallDirectory | Measure-Object).Count -gt 0
     if ($hasContent -and -not (Test-Path -LiteralPath $markerPath -PathType Leaf)) {
-        throw "Refusing to overwrite non-CGen directory: $resolvedInstallDirectory"
+        throw "Refusing to overwrite non-Pinfit directory: $resolvedInstallDirectory"
     }
 }
 
@@ -77,10 +77,10 @@ function Assert-Sha256Match {
 if ($Version) {
     $tag = if ($Version.StartsWith('v')) { $Version } else { "v$Version" }
     $bareVersion = $tag.TrimStart('v')
-    $jarName = "cgen-$bareVersion.jar"
+    $jarName = "pinfit-$bareVersion.jar"
     $releaseBaseUrl = "https://github.com/$repositorySlug/releases/download/$tag"
 
-    $downloadDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "cgen-install-$tag"
+    $downloadDirectory = Join-Path ([System.IO.Path]::GetTempPath()) "pinfit-install-$tag"
     New-Item -ItemType Directory -Force -Path $downloadDirectory | Out-Null
     $downloadedJar = Join-Path $downloadDirectory $jarName
     $downloadedSums = Join-Path $downloadDirectory 'SHA256SUMS'
@@ -96,14 +96,14 @@ if ($Version) {
     $sourceJarPath = $downloadedJar
 
     # -Version mode is meant to run from a single downloaded install.ps1, with no repo
-    # checkout alongside it - so CGen.cmd/uninstall.ps1 can't be assumed to sit next to this
+    # checkout alongside it - so pinfit.cmd/uninstall.ps1 can't be assumed to sit next to this
     # script (via $PSScriptRoot) the way they do in the local-build path below. Fetch them
     # from the same tagged ref instead.
-    $cgenCmdSource = Join-Path $downloadDirectory 'CGen.cmd'
+    $pinfitCmdSource = Join-Path $downloadDirectory 'pinfit.cmd'
     $uninstallSource = Join-Path $downloadDirectory 'uninstall.ps1'
     $rawBaseUrl = "https://raw.githubusercontent.com/$repositorySlug/$tag/scripts"
     try {
-        Invoke-WebRequest -Uri "$rawBaseUrl/CGen.cmd" -OutFile $cgenCmdSource -UseBasicParsing
+        Invoke-WebRequest -Uri "$rawBaseUrl/pinfit.cmd" -OutFile $pinfitCmdSource -UseBasicParsing
         Invoke-WebRequest -Uri "$rawBaseUrl/uninstall.ps1" -OutFile $uninstallSource -UseBasicParsing
     } catch {
         throw "Could not download install scripts for release '$tag': $($_.Exception.Message)"
@@ -121,24 +121,24 @@ if ($Version) {
         }
     }
 
-    $jarCandidates = @(Get-ChildItem -File -LiteralPath (Join-Path $repositoryRoot 'target') -Filter 'cgen-*.jar' |
+    $jarCandidates = @(Get-ChildItem -File -LiteralPath (Join-Path $repositoryRoot 'target') -Filter 'pinfit-*.jar' |
         Where-Object { $_.Name -notlike 'original-*' -and $_.Name -notlike '*-sources.jar' -and $_.Name -notlike '*-javadoc.jar' } |
         Sort-Object LastWriteTimeUtc -Descending)
     if ($jarCandidates.Count -eq 0) {
-        throw "No packaged CGen JAR found. Run without -SkipBuild first."
+        throw "No packaged Pinfit JAR found. Run without -SkipBuild first."
     }
     $sourceJarPath = $jarCandidates[0].FullName
-    $cgenCmdSource = Join-Path $PSScriptRoot 'CGen.cmd'
+    $pinfitCmdSource = Join-Path $PSScriptRoot 'pinfit.cmd'
     $uninstallSource = Join-Path $PSScriptRoot 'uninstall.ps1'
 }
 
 New-Item -ItemType Directory -Force -Path $resolvedInstallDirectory | Out-Null
-$temporaryJar = Join-Path $resolvedInstallDirectory 'cgen.jar.new'
+$temporaryJar = Join-Path $resolvedInstallDirectory 'pinfit.jar.new'
 Copy-Item -Force -LiteralPath $sourceJarPath -Destination $temporaryJar
-Move-Item -Force -LiteralPath $temporaryJar -Destination (Join-Path $resolvedInstallDirectory 'cgen.jar')
-Copy-Item -Force -LiteralPath $cgenCmdSource -Destination (Join-Path $resolvedInstallDirectory 'CGen.cmd')
-Copy-Item -Force -LiteralPath $uninstallSource -Destination (Join-Path $resolvedInstallDirectory 'Uninstall-CGen.ps1')
-Set-Content -LiteralPath $markerPath -Value 'CGen managed installation. Safe removal requires this marker.' -Encoding utf8
+Move-Item -Force -LiteralPath $temporaryJar -Destination (Join-Path $resolvedInstallDirectory 'pinfit.jar')
+Copy-Item -Force -LiteralPath $pinfitCmdSource -Destination (Join-Path $resolvedInstallDirectory 'pinfit.cmd')
+Copy-Item -Force -LiteralPath $uninstallSource -Destination (Join-Path $resolvedInstallDirectory 'Uninstall-Pinfit.ps1')
+Set-Content -LiteralPath $markerPath -Value 'Pinfit managed installation. Safe removal requires this marker.' -Encoding utf8
 
 if (-not $SkipPathUpdate) {
     $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -155,9 +155,9 @@ if (-not $SkipPathUpdate) {
     }
 }
 
-$installedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $resolvedInstallDirectory 'cgen.jar')).Hash.ToLowerInvariant()
-Write-Output "CGen installed in $resolvedInstallDirectory"
+$installedHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $resolvedInstallDirectory 'pinfit.jar')).Hash.ToLowerInvariant()
+Write-Output "Pinfit installed in $resolvedInstallDirectory"
 Write-Output "Installed jar SHA256: $installedHash"
 if (-not $SkipPathUpdate) {
-    Write-Output 'Open a new terminal, then run: CGen --help'
+    Write-Output 'Open a new terminal, then run: pinfit --help'
 }

@@ -5,7 +5,7 @@ contract (`from`) and a vendor HAL (`to`). Functions whose signatures match exac
 call-throughs with no code to write.
 
 ```console
-CGen create adapter bus_adapter --from bus --to bus_hal
+pinfit create adapter bus_adapter --from bus --to bus_hal
 ```
 
 ## Spec
@@ -52,17 +52,17 @@ void bus_adapter_bind_bus(bus_interface_t *interface, bus_adapter_context_t *con
 ## Mapped functions
 
 A mapping is accepted **only** when both functions have the same return type and the exact same
-parameter types in the same order. CGen then generates a direct call-through with no user region:
+parameter types in the same order. Pinfit then generates a direct call-through with no user region:
 
 ```c title="bus_adapter.c"
-/*@CGen(private-function:bus_adapter_bus_write)*/
+/*@Pinfit(private-function:bus_adapter_bus_write)*/
 static int bus_adapter_bus_write(void *context, const uint8_t *data, uint32_t length)
 {
     bus_adapter_context_t *adapter = (bus_adapter_context_t *)context;
-    int cgen_result = -1;
+    int pinfit_result = -1;
 
-    cgen_result = bus_hal_send(adapter->target, data, length);
-    return cgen_result;
+    pinfit_result = bus_hal_send(adapter->target, data, length);
+    return pinfit_result;
 }
 ```
 
@@ -76,16 +76,16 @@ Any `from` function left out of `mappings`, or rejected for a signature mismatch
 plain stub body — exactly like an unmapped module function:
 
 ```c
-/*@CGen(private-function:bus_adapter_bus_reset)*/
+/*@Pinfit(private-function:bus_adapter_bus_reset)*/
 static int bus_adapter_bus_reset(void *context)
 {
     bus_adapter_context_t *adapter = (bus_adapter_context_t *)context;
-    int cgen_result = -1;
+    int pinfit_result = -1;
     (void)adapter;
 
-    /*@CGen usercode+ function.bus.reset.body*/
-    /*@CGen usercode-*/
-    return cgen_result;
+    /*@Pinfit usercode+ function.bus.reset.body*/
+    /*@Pinfit usercode-*/
+    return pinfit_result;
 }
 ```
 
@@ -98,9 +98,9 @@ enum onto another, or emulating a call the HAL does not offer.
     conversion in the region and call the target yourself:
 
     ```c
-    /*@CGen usercode+ function.bus.reset.body*/
-    cgen_result = (bus_hal_power_cycle(adapter->target, 0U) == 0) ? 0 : -1;
-    /*@CGen usercode-*/
+    /*@Pinfit usercode+ function.bus.reset.body*/
+    pinfit_result = (bus_hal_power_cycle(adapter->target, 0U) == 0) ? 0 : -1;
+    /*@Pinfit usercode-*/
     ```
 
 ## Using it

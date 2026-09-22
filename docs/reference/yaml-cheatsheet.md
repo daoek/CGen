@@ -23,7 +23,7 @@ includes: [<stdint.h>, '"vendor_i2c.h"']
 
 ---
 
-## [`cgen.yaml`](../guide/project-configuration.md)
+## [`pinfit.yaml`](../guide/project-configuration.md)
 
 ```yaml
 schema: 1
@@ -124,7 +124,7 @@ singleton: false
 # instance: ra_iic_handle       # rename the singleton accessor
 # singletonElse: true           # add an else branch to it
 
-# Written automatically by @CGenSwitch; a link, never a declaration:
+# Written automatically by @PinfitSwitch; a link, never a declaration:
 # externalEnums:
 #   - { name: flash_opcodes_t, file: ../drivers/flash_regs.h }
 ```
@@ -205,7 +205,7 @@ rejected.
 
 ```yaml
 kind: status-codes
-name: cgen_status
+name: pinfit_status
 description: Shared status codes
 includes: []
 
@@ -249,6 +249,6 @@ mappings:
 | `transition.<from>.<event>.guard` / `.action` | state machine |
 | `event.<EVENT>.unhandled` | state machine |
 | `command.<NAME>.body` / `command.unknown` | command table |
-| `switchcase.<enum>.<case>` | [`@CGenSwitch`](../guide/cgenswitch.md) |
+| `switchcase.<enum>.<case>` | [`@PinfitSwitch`](../guide/pinfitswitch.md) |
 | `<kind>.header.preamble` / `.footer`, `<kind>.source.includes` / `.footer` | observer, command table, adapter, state machine |
 | `status-codes.preamble` / `.footer` | status codes |

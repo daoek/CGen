@@ -1,6 +1,6 @@
 # Troubleshooting
 
-Errors print a red `CGen error` block with the offending file's path, often followed by a cyan hint
+Errors print a red `Pinfit error` block with the offending file's path, often followed by a cyan hint
 about the spec. Nothing is written when generation fails — a run either completes or changes
 nothing.
 
@@ -9,7 +9,7 @@ nothing.
 ### `implements unknown interface '<name>'`
 
 ```console
-CGen error
+Pinfit error
 D:\firmware\drivers\RA\ra_iic.module.yaml implements unknown interface 'nope'
 ```
 
@@ -26,14 +26,14 @@ The same applies to `references unknown ...` from an observer's `interface:` or 
 An [adapter](../generators/adapter.md) mapping names a function that does not exist on the `from` or
 `to` interface. Names are the YAML `name:` of the function, not the generated C identifier.
 
-### `Refusing to overwrite non-CGen file <path>`
+### `Refusing to overwrite non-Pinfit file <path>`
 
 ```console
-CGen error
-Refusing to overwrite non-CGen file D:\firmware\drivers\RA\ra_iic.c (use -f/--force to overwrite)
+Pinfit error
+Refusing to overwrite non-Pinfit file D:\firmware\drivers\RA\ra_iic.c (use -f/--force to overwrite)
 ```
 
-A file CGen was about to write already exists without its generated-file marker. This is the
+A file Pinfit was about to write already exists without its generated-file marker. This is the
 protection for a hand-written file that predates the spec.
 
 Either point the spec at a different `header:` / `source:` name, or — once you are sure the file's
@@ -71,11 +71,11 @@ See [Project configuration](../guide/project-configuration.md).
   by value, so `get_<name>` / `set_<name>` cannot be generated. Keep array variables `private`, or
   expose them as `public` under `extern`.
 
-## `@CGenSwitch` problems
+## `@PinfitSwitch` problems
 
 ### It asks about the same enum every time
 
-Confirmation is only remembered in an `externalEnums:` link on a `.module.yaml`. A `@CGenSwitch`
+Confirmation is only remembered in an `externalEnums:` link on a `.module.yaml`. A `@PinfitSwitch`
 inside a file owned by a state machine, observer, command table or adapter spec has nowhere to
 record it. Declare the enum in a YAML `enums:` block instead.
 
@@ -91,13 +91,13 @@ relative to the YAML holding the entry. Fix the path, or delete the entry to be 
 
 ### Generation fails on a `case` label
 
-A hand-written `case` in a tagged switch does not match any member of the enum. CGen fails rather
+A hand-written `case` in a tagged switch does not match any member of the enum. Pinfit fails rather
 than silently dropping your code. Remove or correct that case, then generate again. See
-[`@CGenSwitch`](../guide/cgenswitch.md#tagging-a-switch-you-already-wrote).
+[`@PinfitSwitch`](../guide/pinfitswitch.md#tagging-a-switch-you-already-wrote).
 
 ## My code disappeared
 
-It did not — CGen never deletes user region content. Check these in order:
+It did not — Pinfit never deletes user region content. Check these in order:
 
 1. **Was it inside a region?** Only text between `usercode+` and `usercode-` is preserved. Anything
    else in a generated file is rewritten every run.
@@ -109,7 +109,7 @@ It did not — CGen never deletes user region content. Check these in order:
    If it was changed or deleted, the code is still in the file but no longer attached to anything —
    recover it from version control or by reading the file.
 
-Run `CGen generate -v` to see how many regions were carried over per file.
+Run `pinfit generate -v` to see how many regions were carried over per file.
 
 ## Nothing was generated
 
@@ -118,15 +118,15 @@ Run `CGen generate -v` to see how many regions were carried over per file.
 ```
 
 - **Wrong directory.** `generate` scans from the directory you gave it, defaulting to the current
-  one. The project root is found by walking *up* for a `cgen.yaml`, but the *scan* starts where you
+  one. The project root is found by walking *up* for a `pinfit.yaml`, but the *scan* starts where you
   are.
-- **The specs are in a nested project.** A subdirectory with its own `cgen.yaml` is skipped
-  entirely. Run CGen from inside it, or pass
+- **The specs are in a nested project.** A subdirectory with its own `pinfit.yaml` is skipped
+  entirely. Run Pinfit from inside it, or pass
   [`--also-nested`](../guide/nested-projects.md#generating-everything-at-once-also-nested).
 - **File names.** A spec has to be named `<name>.<kind>.yaml` — `door.state-machine.yaml`, not
   `door.statemachine.yaml` or `door.yaml`.
 
-Use `CGen generate -v` to print the project root and scope it actually used.
+Use `pinfit generate -v` to print the project root and scope it actually used.
 
 ## The generated code will not compile
 
@@ -136,7 +136,7 @@ Use `CGen generate -v` to print the project root and scope it actually used.
   its header to `includes`, or declare the type in `enums` / `structs`.
 - **Unprefixed standalone functions.** A module's own `functions:` are **not** module-prefixed, so
   two modules both declaring `initialize` collide at link time. Keep those names unique yourself.
-- **`cgen_result` unused, or an early `return`.** In a non-`void` region, assign to `cgen_result`
+- **`pinfit_result` unused, or an early `return`.** In a non-`void` region, assign to `pinfit_result`
   rather than returning. See [MISRA](../guide/misra.md).
 
 ## Line endings churn in every diff
@@ -149,5 +149,5 @@ rewrites every file.
 
 Run with `-v` for the project root, scope and per-file detail, and check the spec against the
 [YAML cheat sheet](yaml-cheatsheet.md). If the behaviour still looks wrong, open an issue at
-[github.com/daoek/CGen/issues](https://github.com/daoek/CGen/issues) with the spec file and the
+[github.com/daoek/Pinfit/issues](https://github.com/daoek/Pinfit/issues) with the spec file and the
 exact error text.

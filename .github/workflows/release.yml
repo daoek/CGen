@@ -37,7 +37,7 @@ jobs:
       - name: Compute checksum
         shell: pwsh
         run: |
-          $jar = Get-ChildItem -File -Path target -Filter 'cgen-*.jar' |
+          $jar = Get-ChildItem -File -Path target -Filter 'pinfit-*.jar' |
               Where-Object { $_.Name -notlike 'original-*' -and $_.Name -notlike '*-sources.jar' -and $_.Name -notlike '*-javadoc.jar' } |
               Select-Object -First 1
           $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $jar.FullName).Hash.ToLower()
@@ -48,7 +48,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            target/cgen-*.jar
+            target/pinfit-*.jar
             target/SHA256SUMS
           fail_on_unmatched_files: true
           generate_release_notes: true

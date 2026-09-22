@@ -1,9 +1,9 @@
 # Project configuration
 
-`cgen.yaml` marks the root of a project and holds generator-wide preferences. It does not emit any
+`pinfit.yaml` marks the root of a project and holds generator-wide preferences. It does not emit any
 C of its own.
 
-```yaml title="cgen.yaml"
+```yaml title="pinfit.yaml"
 schema: 1
 name: firmware
 version: 0.1.0
@@ -28,9 +28,9 @@ stateSmith:
 strict: false
 ```
 
-Create it with [`CGen init`](../reference/cli.md#cgen-init). Its location defines the project:
-every `CGen` command you run from this directory or any descendant uses this file, and the scan
-stops at any subdirectory that has a `cgen.yaml` of its own
+Create it with [`pinfit init`](../reference/cli.md#pinfit-init). Its location defines the project:
+every `Pinfit` command you run from this directory or any descendant uses this file, and the scan
+stops at any subdirectory that has a `pinfit.yaml` of its own
 (see [Nested projects](nested-projects.md)).
 
 ## `documentation`
@@ -94,16 +94,16 @@ Decides how a module's non-`private` variables are exposed, project-wide.
 
 === "`accessors`"
 
-    The variable stays `static` (private storage) and CGen generates `get_<name>` / `set_<name>`
+    The variable stays `static` (private storage) and Pinfit generates `get_<name>` / `set_<name>`
     functions instead — no module prefix — each with its own user region, so you can add
     validation or side effects on read and write.
 
     ```c title="ra_iic.c"
     uint32_t get_transfer_count(void)
     {
-    /*@CGen usercode+ variable.transfer_count.get*/
+    /*@Pinfit usercode+ variable.transfer_count.get*/
         return transfer_count;
-    /*@CGen usercode-*/
+    /*@Pinfit usercode-*/
     }
     ```
 
@@ -128,7 +128,7 @@ stub compiles warning-free under `-Wunused-parameter`:
 static common_iic_status_t ra_iic_common_iic_write(void *context, uint32_t length)
 {
     ra_iic_context_t *module = (ra_iic_context_t *)context;
-    common_iic_status_t cgen_result = COMMON_IIC_INVALID_PARAM;
+    common_iic_status_t pinfit_result = COMMON_IIC_INVALID_PARAM;
     (void)module;
     (void)length;
     ...
@@ -164,12 +164,12 @@ state machine; `generate` never invokes or requires `ss.cli` otherwise.
 
 Default `false`. When `true`, `generate` fails instead of warning on a non-`void` function that
 has no [`invalidReturn`/`uninitializedReturn`](../generators/interface.md#invalidreturn-and-uninitializedreturn)
-anywhere and falls back to a zero initializer. `CGen generate --strict` does the same for one run
-without changing `cgen.yaml`.
+anywhere and falls back to a zero initializer. `pinfit generate --strict` does the same for one run
+without changing `pinfit.yaml`.
 
 ## `schema`, `name`, `version`
 
-- `schema: 1` is the config format version CGen validates against.
-- `name` is what [`CGen detach`](../reference/cli.md#cgen-detach) requires you to type to confirm
+- `schema: 1` is the config format version Pinfit validates against.
+- `name` is what [`pinfit detach`](../reference/cli.md#pinfit-detach) requires you to type to confirm
   that destructive command, so keep it recognisable.
-- `version` is yours to use for your own release tracking; CGen only carries it.
+- `version` is yours to use for your own release tracking; Pinfit only carries it.

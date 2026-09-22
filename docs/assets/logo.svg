@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <title>Pinfit</title>
+  <!-- socket body -->
+  <rect x="5" y="17" width="22" height="10" rx="3"/>
+  <!-- socket hole the pin clicks into -->
+  <circle cx="16" cy="22" r="3.2" fill="currentColor" stroke="none"/>
+  <!-- pin shaft, aligned above the hole -->
+  <line x1="16" y1="4.5" x2="16" y2="21"/>
+  <!-- pin head -->
+  <rect x="12" y="3" width="8" height="5" rx="2"/>
+  <!-- click marks either side of the socket -->
+  <line x1="6" y1="12" x2="8.5" y2="14.5"/>
+  <line x1="26" y1="12" x2="23.5" y2="14.5"/>
+</svg>

@@ -2,7 +2,7 @@
     "version": "2.0.0",
     "tasks": [
         {
-            "label": "CGen: Package + Install",
+            "label": "Pinfit: Package + Install",
             "type": "process",
             "command": "powershell.exe",
             "args": [
@@ -28,8 +28,8 @@
             "problemMatcher": []
         },
         {
-            "label": "CGen: Debug Install (local build, overwrite)",
-            "detail": "Packages the project and force-installs the newest local jar to %LOCALAPPDATA%\\CGen, replacing whatever version (including a released one) is installed there.",
+            "label": "Pinfit: Debug Install (local build, overwrite)",
+            "detail": "Packages the project and force-installs the newest local jar to %LOCALAPPDATA%\\Pinfit, replacing whatever version (including a released one) is installed there.",
             "type": "process",
             "command": "powershell.exe",
             "args": [

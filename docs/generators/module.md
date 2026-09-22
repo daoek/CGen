@@ -5,7 +5,7 @@ implementation of any number of [interfaces](interface.md). It generates a **hea
 and it is where most of your hand-written code lives.
 
 ```console
-CGen create module ra_iic drivers/RA --implements common_iic
+pinfit create module ra_iic drivers/RA --implements common_iic
 ```
 
 ## Spec
@@ -48,7 +48,7 @@ variables:
 | `singleton` | `true` generates a lazy-init instance accessor. See [below](#singleton). |
 | `singletonElse` | `true` adds an `else` branch to that accessor. |
 | `instance` | Renames the generated singleton accessor (default `<name>_instance`). |
-| `externalEnums` | Links to enums declared in your own headers, written automatically by [`@CGenSwitch`](../guide/cgenswitch.md#what-gets-remembered). |
+| `externalEnums` | Links to enums declared in your own headers, written automatically by [`@PinfitSwitch`](../guide/pinfitswitch.md#what-gets-remembered). |
 
 ## Implementing an interface
 
@@ -56,20 +56,20 @@ Each entry in `implements` produces one `static` function per interface function
 function that populates the interface table:
 
 ```c title="ra_iic.c"
-/*@CGen(private-function:ra_iic_common_iic_write)*/
+/*@Pinfit(private-function:ra_iic_common_iic_write)*/
 static common_iic_status_t ra_iic_common_iic_write(void *context, uint32_t slave_address, const uint8_t *data, uint32_t length)
 {
     ra_iic_context_t *module = (ra_iic_context_t *)context;
-    common_iic_status_t cgen_result = COMMON_IIC_INVALID_PARAM;
+    common_iic_status_t pinfit_result = COMMON_IIC_INVALID_PARAM;
     (void)module;
     (void)slave_address;
 
-    /*@CGen usercode+ function.common_iic.write.body*/
-    /*@CGen usercode-*/
-    return cgen_result;
+    /*@Pinfit usercode+ function.common_iic.write.body*/
+    /*@Pinfit usercode-*/
+    return pinfit_result;
 }
 
-/*@CGen(bind-function:ra_iic_bind_common_iic)*/
+/*@Pinfit(bind-function:ra_iic_bind_common_iic)*/
 void ra_iic_bind_common_iic(common_iic_interface_t *interface, ra_iic_context_t *context)
 {
     if (interface != NULL)
@@ -81,10 +81,10 @@ void ra_iic_bind_common_iic(common_iic_interface_t *interface, ra_iic_context_t 
 ```
 
 Your code goes in `function.<interface>.<function>.body`. The context is pre-cast for you as
-`module`, and `cgen_result` starts at the interface's `invalidReturn` — assign to it rather than
+`module`, and `pinfit_result` starts at the interface's `invalidReturn` — assign to it rather than
 returning early (see [MISRA](../guide/misra.md)).
 
-The interface header is included from the module header with a relative path CGen works out itself.
+The interface header is included from the module header with a relative path Pinfit works out itself.
 
 ## `variables`
 
@@ -114,12 +114,12 @@ That is a project-wide decision, made by
 === "`extern` (default)"
 
     ```c title="ra_iic.h"
-    /*@CGen(public-variable:transfer_count)*/
+    /*@Pinfit(public-variable:transfer_count)*/
     extern uint32_t transfer_count;
     ```
 
     ```c title="ra_iic.c"
-    /*@CGen(variable-definition:transfer_count)*/
+    /*@Pinfit(variable-definition:transfer_count)*/
     uint32_t transfer_count;
     ```
 
@@ -129,20 +129,20 @@ That is a project-wide decision, made by
     with its own user region:
 
     ```c title="led.h"
-    /*@CGen(public-accessor:blink_count)*/
+    /*@Pinfit(public-accessor:blink_count)*/
     uint32_t get_blink_count(void);
     ```
 
     ```c title="led.c"
-    /*@CGen(private-variable:blink_count)*/
+    /*@Pinfit(private-variable:blink_count)*/
     static uint32_t blink_count;
 
-    /*@CGen(public-accessor:blink_count)*/
+    /*@Pinfit(public-accessor:blink_count)*/
     uint32_t get_blink_count(void)
     {
-        /*@CGen usercode+ variable.blink_count.get*/
+        /*@Pinfit usercode+ variable.blink_count.get*/
         return blink_count;
-        /*@CGen usercode-*/
+        /*@Pinfit usercode-*/
     }
     ```
 
@@ -174,14 +174,14 @@ functions:
 ```
 
 ```c title="led.c"
-/*@CGen(function:initialize)*/
+/*@Pinfit(function:initialize)*/
 bool initialize(void)
 {
-    bool cgen_result = false;
+    bool pinfit_result = false;
 
-    /*@CGen usercode+ function.initialize.body*/
-    /*@CGen usercode-*/
-    return cgen_result;
+    /*@Pinfit usercode+ function.initialize.body*/
+    /*@Pinfit usercode-*/
+    return pinfit_result;
 }
 ```
 
@@ -215,7 +215,7 @@ led_context_t *led_instance(void);
 ```
 
 ```c title="led.c"
-/*@CGen(function:led_instance)*/
+/*@Pinfit(function:led_instance)*/
 static led_context_t led_singleton_context;
 static bool led_singleton_initialized = false;
 
@@ -224,15 +224,15 @@ led_context_t *led_instance(void)
     if (!led_singleton_initialized)
     {
         led_singleton_initialized = true;
-        /*@CGen usercode+ singleton.init*/
+        /*@Pinfit usercode+ singleton.init*/
         /* One-time setup for the singleton instance. */
-        /*@CGen usercode-*/
+        /*@Pinfit usercode-*/
     }
     else
     {
-        /*@CGen usercode+ singleton.else*/
+        /*@Pinfit usercode+ singleton.else*/
         /* Runs on every call after the first. */
-        /*@CGen usercode-*/
+        /*@Pinfit usercode-*/
     }
     return &led_singleton_context;
 }
@@ -253,7 +253,7 @@ The context lives in static storage; `singleton.init` runs on the first call onl
 | `module.header.preamble` | Declarations needed before the generated types |
 | `module.header.footer` | Macros or inline helpers exposed to users of the module |
 | `module.source.includes` | Extra `#include` lines |
-| `module.source.variables` | File-scope state CGen does not know about |
+| `module.source.variables` | File-scope state Pinfit does not know about |
 | `module.source.prototypes` | Forward declarations for your own helpers |
 | `module.source.footer` | Definitions of those helpers |
 | `function.<interface>.<function>.body` | An implemented interface function |
@@ -264,5 +264,5 @@ The context lives in static storage; `singleton.init` runs on the first call onl
 ## See also
 
 - [Interface](interface.md) — the contract a module implements.
-- [`@CGenSwitch`](../guide/cgenswitch.md) — generate switch cases inside a module function body.
-- [`CGen rename module`](../reference/cli.md#cgen-rename-module) — rename a module and its files.
+- [`@PinfitSwitch`](../guide/pinfitswitch.md) — generate switch cases inside a module function body.
+- [`pinfit rename module`](../reference/cli.md#pinfit-rename-module) — rename a module and its files.

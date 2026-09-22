@@ -5,7 +5,7 @@ An interface is a contract that any number of [modules](module.md) can implement
 function per entry. Callers include the interface header and never the driver.
 
 ```console
-CGen create interface common_iic drivers/Interface
+pinfit create interface common_iic drivers/Interface
 ```
 
 ## Spec
@@ -103,7 +103,7 @@ visible where it is used: declare the enum in `enums`, or pull its header in thr
 
     `generate` prints a warning for every function that falls all the way through to the zero
     initializer, naming the spec file, the interface (or module) and the function. Set
-    [`strict: true`](../guide/project-configuration.md#strict) in `cgen.yaml`, or pass
+    [`strict: true`](../guide/project-configuration.md#strict) in `pinfit.yaml`, or pass
     `--strict` to one `generate` run, to fail instead of warn.
 
 ### `functions`
@@ -130,7 +130,7 @@ compact shorthand as parameters.
 ## Generated output
 
 ```c title="drivers/Interface/common_iic_I.h"
-/*@CGen(file:interface:common_iic.interface.yaml)*/
+/*@Pinfit(file:interface:common_iic.interface.yaml)*/
 /**
  * @file common_iic_I.h
  * @brief Portable I2C master interface
@@ -142,10 +142,10 @@ compact shorthand as parameters.
 #include <stddef.h>
 #include <stdint.h>
 
-/*@CGen usercode+ interface.preamble*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ interface.preamble*/
+/*@Pinfit usercode-*/
 
-/*@CGen(enum:common_iic_status_t)*/
+/*@Pinfit(enum:common_iic_status_t)*/
 /** @brief Transfer result */
 typedef enum
 {
@@ -154,42 +154,42 @@ typedef enum
     COMMON_IIC_NOT_INITIALIZED = 2
 } common_iic_status_t;
 
-/*@CGen usercode+ interface.declarations*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ interface.declarations*/
+/*@Pinfit usercode-*/
 
-/*@CGen(interface-table:common_iic)*/
+/*@Pinfit(interface-table:common_iic)*/
 typedef struct
 {
     void *context;
     common_iic_status_t (*write)(void *context, uint32_t slave_address, const uint8_t *data, uint32_t length);
 } common_iic_interface_t;
 
-/*@CGen(function:write)*/
+/*@Pinfit(function:write)*/
 /**
  * @brief Write bytes to a slave
  * @return common_iic_status_t result.
  */
 static inline common_iic_status_t common_iic_write(const common_iic_interface_t * const interface, uint32_t slave_address, const uint8_t *data, uint32_t length)
 {
-    common_iic_status_t cgen_result = COMMON_IIC_INVALID_PARAM;
+    common_iic_status_t pinfit_result = COMMON_IIC_INVALID_PARAM;
 
     if (interface != NULL)
     {
         if ((interface->context != NULL) && (interface->write != NULL))
         {
-            cgen_result = interface->write(interface->context, slave_address, data, length);
+            pinfit_result = interface->write(interface->context, slave_address, data, length);
         }
         else
         {
-            cgen_result = COMMON_IIC_NOT_INITIALIZED;
+            pinfit_result = COMMON_IIC_NOT_INITIALIZED;
         }
     }
 
-    return cgen_result;
+    return pinfit_result;
 }
 
-/*@CGen usercode+ interface.footer*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ interface.footer*/
+/*@Pinfit usercode-*/
 
 #endif /* COMMON_IIC_I_H_ */
 ```

@@ -4,25 +4,25 @@ In this walkthrough you build a portable I2C interface and one RA-family impleme
 then fill in the driver code and regenerate to prove that it survives. Every output on this page
 is real output from the commands above it.
 
-You need CGen [installed](installation.md) and an empty directory to work in.
+You need Pinfit [installed](installation.md) and an empty directory to work in.
 
 ## 1. Create the project
 
 ```console
-CGen init
+pinfit init
 ```
 
 ```title="Output"
-Created D:\firmware\cgen.yaml
+Created D:\firmware\pinfit.yaml
 ```
 
-That is the only file `init` writes. CGen never invents a source layout for you — you choose the
+That is the only file `init` writes. Pinfit never invents a source layout for you — you choose the
 directories, and generated files follow the YAML that describes them.
 
-The generated `cgen.yaml` holds generator-wide preferences, fully commented:
+The generated `pinfit.yaml` holds generator-wide preferences, fully commented:
 
-```yaml title="cgen.yaml"
-# CGen project configuration
+```yaml title="pinfit.yaml"
+# Pinfit project configuration
 schema: 1
 name: 'firmware'
 version: 0.1.0
@@ -45,8 +45,8 @@ when you want to change them.
 ## 2. Scaffold an interface and a module
 
 ```console
-CGen create interface common_iic drivers/Interface
-CGen create module ra_iic drivers/RA --implements common_iic
+pinfit create interface common_iic drivers/Interface
+pinfit create module ra_iic drivers/RA --implements common_iic
 ```
 
 ```title="Output"
@@ -97,7 +97,7 @@ functions:
 
 `invalidReturn` and `uninitializedReturn` are what the generated guards return when a caller
 passes a null interface, or calls before anything was bound. Give them per function, per return
-type through `invalidReturns`, or once per interface as above - CGen never spreads one scalar
+type through `invalidReturns`, or once per interface as above - Pinfit never spreads one scalar
 across return types it does not fit. See
 [`invalidReturn` and `uninitializedReturn`](../generators/interface.md#invalidreturn-and-uninitializedreturn).
 
@@ -128,7 +128,7 @@ variables:
 ## 5. Generate
 
 ```console
-CGen generate
+pinfit generate
 ```
 
 ```title="Output"
@@ -147,7 +147,7 @@ they live in different directories.
 ### The generated interface
 
 ```c title="drivers/Interface/common_iic_I.h"
-/*@CGen(file:interface:common_iic.interface.yaml)*/
+/*@Pinfit(file:interface:common_iic.interface.yaml)*/
 /**
  * @file common_iic_I.h
  * @brief Portable I2C master interface
@@ -159,10 +159,10 @@ they live in different directories.
 #include <stddef.h>
 #include <stdint.h>
 
-/*@CGen usercode+ interface.preamble*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ interface.preamble*/
+/*@Pinfit usercode-*/
 
-/*@CGen(enum:common_iic_status_t)*/
+/*@Pinfit(enum:common_iic_status_t)*/
 /** @brief Transfer result */
 typedef enum
 {
@@ -171,17 +171,17 @@ typedef enum
     COMMON_IIC_NOT_INITIALIZED = 2
 } common_iic_status_t;
 
-/*@CGen usercode+ interface.declarations*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ interface.declarations*/
+/*@Pinfit usercode-*/
 
-/*@CGen(interface-table:common_iic)*/
+/*@Pinfit(interface-table:common_iic)*/
 typedef struct
 {
     void *context;
     common_iic_status_t (*write)(void *context, uint32_t slave_address, const uint8_t *data, uint32_t length);
 } common_iic_interface_t;
 
-/*@CGen(function:write)*/
+/*@Pinfit(function:write)*/
 /**
  * @brief Write bytes to a slave
  * @param slave_address slave_address
@@ -191,25 +191,25 @@ typedef struct
  */
 static inline common_iic_status_t common_iic_write(const common_iic_interface_t * const interface, uint32_t slave_address, const uint8_t *data, uint32_t length)
 {
-    common_iic_status_t cgen_result = COMMON_IIC_INVALID_PARAM;
+    common_iic_status_t pinfit_result = COMMON_IIC_INVALID_PARAM;
 
     if (interface != NULL)
     {
         if ((interface->context != NULL) && (interface->write != NULL))
         {
-            cgen_result = interface->write(interface->context, slave_address, data, length);
+            pinfit_result = interface->write(interface->context, slave_address, data, length);
         }
         else
         {
-            cgen_result = COMMON_IIC_NOT_INITIALIZED;
+            pinfit_result = COMMON_IIC_NOT_INITIALIZED;
         }
     }
 
-    return cgen_result;
+    return pinfit_result;
 }
 
-/*@CGen usercode+ interface.footer*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ interface.footer*/
+/*@Pinfit usercode-*/
 
 #endif /* COMMON_IIC_I_H_ */
 ```
@@ -221,7 +221,7 @@ driver.
 ### The generated module header
 
 ```c title="drivers/RA/ra_iic.h"
-/*@CGen(file:module-header:ra_iic.module.yaml)*/
+/*@Pinfit(file:module-header:ra_iic.module.yaml)*/
 /**
  * @file ra_iic.h
  * @brief RA-family I2C implementation
@@ -232,24 +232,24 @@ driver.
 
 #include "../Interface/common_iic_I.h"
 
-/*@CGen usercode+ module.header.preamble*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ module.header.preamble*/
+/*@Pinfit usercode-*/
 
-/*@CGen(public-variable:transfer_count)*/
+/*@Pinfit(public-variable:transfer_count)*/
 /** @brief transfer_count */
 extern uint32_t transfer_count;
 
-/*@CGen(context:ra_iic)*/
+/*@Pinfit(context:ra_iic)*/
 typedef struct
 {
     void *hardware;
 } ra_iic_context_t;
 
-/*@CGen(bind-function:ra_iic_bind_common_iic)*/
+/*@Pinfit(bind-function:ra_iic_bind_common_iic)*/
 void ra_iic_bind_common_iic(common_iic_interface_t *interface, ra_iic_context_t *context);
 
-/*@CGen usercode+ module.header.footer*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ module.header.footer*/
+/*@Pinfit usercode-*/
 
 #endif /* RA_IIC_H_ */
 ```
@@ -260,40 +260,40 @@ implemented interface gets one `<module>_bind_<interface>` function.
 ### The generated module source
 
 ```c title="drivers/RA/ra_iic.c"
-/*@CGen(file:module-source:ra_iic.module.yaml)*/
+/*@Pinfit(file:module-source:ra_iic.module.yaml)*/
 #include "ra_iic.h"
 
-/*@CGen usercode+ module.source.includes*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ module.source.includes*/
+/*@Pinfit usercode-*/
 
-/*@CGen usercode+ module.source.variables*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ module.source.variables*/
+/*@Pinfit usercode-*/
 
-/*@CGen usercode+ module.source.prototypes*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ module.source.prototypes*/
+/*@Pinfit usercode-*/
 
-/*@CGen(variable-definition:transfer_count)*/
+/*@Pinfit(variable-definition:transfer_count)*/
 uint32_t transfer_count;
 
-/*@CGen(private-variable:busy)*/
+/*@Pinfit(private-variable:busy)*/
 static bool busy;
 
-/*@CGen(private-function:ra_iic_common_iic_write)*/
+/*@Pinfit(private-function:ra_iic_common_iic_write)*/
 static common_iic_status_t ra_iic_common_iic_write(void *context, uint32_t slave_address, const uint8_t *data, uint32_t length)
 {
     ra_iic_context_t *module = (ra_iic_context_t *)context;
-    common_iic_status_t cgen_result = COMMON_IIC_INVALID_PARAM;
+    common_iic_status_t pinfit_result = COMMON_IIC_INVALID_PARAM;
     (void)module;
     (void)slave_address;
     (void)data;
     (void)length;
 
-    /*@CGen usercode+ function.common_iic.write.body*/
-    /*@CGen usercode-*/
-    return cgen_result;
+    /*@Pinfit usercode+ function.common_iic.write.body*/
+    /*@Pinfit usercode-*/
+    return pinfit_result;
 }
 
-/*@CGen(bind-function:ra_iic_bind_common_iic)*/
+/*@Pinfit(bind-function:ra_iic_bind_common_iic)*/
 void ra_iic_bind_common_iic(common_iic_interface_t *interface, ra_iic_context_t *context)
 {
     if (interface != NULL)
@@ -303,11 +303,11 @@ void ra_iic_bind_common_iic(common_iic_interface_t *interface, ra_iic_context_t 
     }
 }
 
-/*@CGen usercode+ module.source.footer*/
-/*@CGen usercode-*/
+/*@Pinfit usercode+ module.source.footer*/
+/*@Pinfit usercode-*/
 ```
 
-The stub compiles as-is. `cgen_result` is pre-set to the interface's `invalidReturn`, and the
+The stub compiles as-is. `pinfit_result` is pre-set to the interface's `invalidReturn`, and the
 `(void)parameter;` lines keep an untouched stub warning-free.
 
 ## 6. Write your code, then regenerate
@@ -315,17 +315,17 @@ The stub compiles as-is. `cgen_result` is pre-set to the interface's `invalidRet
 Fill in the region — and only the region:
 
 ```c title="drivers/RA/ra_iic.c"
-    /*@CGen usercode+ function.common_iic.write.body*/
+    /*@Pinfit usercode+ function.common_iic.write.body*/
     if ((data != NULL) && (length > 0U))
     {
         busy = true;
-        cgen_result = vendor_i2c_write(module->hardware, slave_address, data, length)
+        pinfit_result = vendor_i2c_write(module->hardware, slave_address, data, length)
             ? COMMON_IIC_SUCCESS
             : COMMON_IIC_INVALID_PARAM;
         transfer_count++;
         busy = false;
     }
-    /*@CGen usercode-*/
+    /*@Pinfit usercode-*/
 ```
 
 Now add a second function to the interface YAML:
@@ -346,7 +346,7 @@ functions:
 and regenerate:
 
 ```console
-CGen generate
+pinfit generate
 ```
 
 `ra_iic.c` now has a fresh `function.common_iic.read.body` stub, the dispatch table and bind
@@ -354,11 +354,11 @@ function have grown a `read` entry — and your `write` body is exactly where yo
 
 !!! warning "Stay inside the regions"
 
-    Anything you write **outside** a `usercode+` / `usercode-` pair is CGen's to rewrite. Put
+    Anything you write **outside** a `usercode+` / `usercode-` pair is Pinfit's to rewrite. Put
     extra includes in `module.source.includes`, file-scope helpers in `module.source.variables`
     or `module.source.prototypes`, and everything else in the region that belongs to it.
 
-    CGen refuses to overwrite any file that does not carry its generated-file marker, so it will
+    Pinfit refuses to overwrite any file that does not carry its generated-file marker, so it will
     never clobber a hand-written file you happened to name the same.
 
 ## 7. Use it
@@ -398,15 +398,15 @@ double, means binding a different module to the same `bus` — no call site chan
 
 -   :material-content-save-cog: **Understand regeneration**
 
-    Which regions exist, what happens to removed items, and how to leave CGen for good.
+    Which regions exist, what happens to removed items, and how to leave Pinfit for good.
 
     [:octicons-arrow-right-24: User regions](../guide/user-regions.md)
 
 -   :material-code-braces: **Stop writing switch cases**
 
-    Tag a switch with `@CGenSwitch` and let CGen keep one case per enum member in sync.
+    Tag a switch with `@PinfitSwitch` and let Pinfit keep one case per enum member in sync.
 
-    [:octicons-arrow-right-24: @CGenSwitch](../guide/cgenswitch.md)
+    [:octicons-arrow-right-24: @PinfitSwitch](../guide/pinfitswitch.md)
 
 -   :material-console: **Full command list**
 

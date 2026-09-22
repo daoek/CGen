@@ -1,16 +1,16 @@
-# CGen
+# Pinfit
 
-<div class="cgen-hero" markdown>
+<div class="pinfit-hero" markdown>
 
 ## Describe the shape of your C, write only the logic
 
-CGen is a small, YAML-driven command line tool for embedded C projects. You describe an
+Pinfit is a small, YAML-driven command line tool for embedded C projects. You describe an
 interface, a module, a state machine or another well-known pattern in a short YAML file, and
-CGen generates the headers and sources around it: the structs, the function-pointer tables,
+Pinfit generates the headers and sources around it: the structs, the function-pointer tables,
 the null checks, the dispatch, the Doxygen comments.
 
 Your own code lives in named **user regions** inside those generated files. Regenerate as
-often as you like — CGen writes the structure around your code and never touches what is
+often as you like — Pinfit writes the structure around your code and never touches what is
 inside a region.
 
 </div>
@@ -30,23 +30,23 @@ context:
 ```
 
 ```c title="drivers/RA/ra_iic.c (generated — you fill in the region)"
-/*@CGen(private-function:ra_iic_common_iic_write)*/
+/*@Pinfit(private-function:ra_iic_common_iic_write)*/
 static common_iic_status_t ra_iic_common_iic_write(void *context, uint32_t slave_address, const uint8_t *data, uint32_t length)
 {
     ra_iic_context_t *module = (ra_iic_context_t *)context;
-    common_iic_status_t cgen_result = COMMON_IIC_INVALID_PARAM;
+    common_iic_status_t pinfit_result = COMMON_IIC_INVALID_PARAM;
 
-    /*@CGen usercode+ function.common_iic.write.body*/
+    /*@Pinfit usercode+ function.common_iic.write.body*/
     /* Your driver code goes here and survives every regeneration. */
-    /*@CGen usercode-*/
-    return cgen_result;
+    /*@Pinfit usercode-*/
+    return pinfit_result;
 }
 ```
 
 [Get started :material-arrow-right:](getting-started/installation.md){ .md-button .md-button--primary }
 [See the generators](generators/index.md){ .md-button }
 
-## Why CGen
+## Why Pinfit
 
 <div class="grid cards" markdown>
 
@@ -65,7 +65,7 @@ static common_iic_status_t ra_iic_common_iic_write(void *context, uint32_t slave
     ---
 
     Interfaces, modules, state machines, observers, command tables, status codes and adapters.
-    Every kind is one YAML file and the same `CGen generate` command.
+    Every kind is one YAML file and the same `pinfit generate` command.
 
     [:octicons-arrow-right-24: Generators](generators/index.md)
 
@@ -83,8 +83,8 @@ static common_iic_status_t ra_iic_common_iic_write(void *context, uint32_t slave
 
     ---
 
-    CGen produces plain C with no library to link and nothing to allocate. A directory with its
-    own `cgen.yaml` is a self-contained project, so vendored libraries stay untouched.
+    Pinfit produces plain C with no library to link and nothing to allocate. A directory with its
+    own `pinfit.yaml` is a self-contained project, so vendored libraries stay untouched.
 
     [:octicons-arrow-right-24: Nested projects](guide/nested-projects.md)
 
@@ -93,23 +93,23 @@ static common_iic_status_t ra_iic_common_iic_write(void *context, uint32_t slave
 ## The workflow in four commands
 
 ```console
-CGen init
-CGen create interface common_iic drivers/Interface
-CGen create module ra_iic drivers/RA --implements common_iic
-CGen generate
+pinfit init
+pinfit create interface common_iic drivers/Interface
+pinfit create module ra_iic drivers/RA --implements common_iic
+pinfit generate
 ```
 
-`init` writes a `cgen.yaml` and nothing else — CGen never chooses a source layout for you.
+`init` writes a `pinfit.yaml` and nothing else — Pinfit never chooses a source layout for you.
 `create` scaffolds a fully commented spec file. `generate` scans the project tree and writes
 every header and source that the specs describe.
 
 [Walk through it step by step :material-arrow-right:](getting-started/quickstart.md){ .md-button }
 
-## What CGen is not
+## What Pinfit is not
 
-- **Not a build system.** CGen writes `.h` and `.c` files; your existing Make, CMake or IDE
+- **Not a build system.** Pinfit writes `.h` and `.c` files; your existing Make, CMake or IDE
   project compiles them.
 - **Not a C parser.** It reads YAML, plus a light best-effort scan of your headers for
-  [`@CGenSwitch`](guide/cgenswitch.md) enum lookups.
-- **Not a lock-in.** [`CGen detach`](reference/cli.md#cgen-detach) strips every marker and leaves
+  [`@PinfitSwitch`](guide/pinfitswitch.md) enum lookups.
+- **Not a lock-in.** [`pinfit detach`](reference/cli.md#pinfit-detach) strips every marker and leaves
   you with ordinary C source you can maintain by hand forever.
