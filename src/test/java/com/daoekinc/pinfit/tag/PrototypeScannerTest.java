@@ -119,4 +119,77 @@ class PrototypeScannerTest {
         assertTrue(scan.isEmpty());
         assertEquals(content, scan.updatedContent());
     }
+
+    @Test
+    void skipsCommentsDirectivesControlFlowAndNonDefinitions() {
+        String content = HEADER + """
+                /*@Pinfit usercode+ module.source.footer*/
+
+                #define HELPER(x) (x)
+                // void commented(void) {
+                /* void block_comment(void) { */
+                 * void doc_line(void) {
+                if (ready) {
+                while (busy)
+                {
+                }
+                call_something(1)
+                no_return_type(void) {
+                void opens_later(void)
+                int not_a_brace;
+                static int twice(void) {
+                static int twice(void) {
+                void same_line(void) { return; }
+                int *(void) {
+                /*@Pinfit usercode-*/
+                /*@Pinfit usercode-*/
+                /*@Pinfit usercode+ module.source.last*/
+                void last_line_without_brace(void)""";
+
+        PrototypeScanner.Scan scan = PrototypeScanner.scan(content, "foo.c");
+
+        assertEquals(List.of("twice"), scan.missing().stream().map(PrototypeScanner.Missing::name).toList());
+        assertEquals("static int twice(void);", scan.missing().get(0).signature());
+    }
+
+    @Test
+    void emptyParameterListBecomesVoidWhenBraceOpensOnTheSameLine() {
+        String content = HEADER + """
+                /*@Pinfit usercode+ module.source.footer*/
+                static int helper() {
+                    return 0;
+                }
+                /*@Pinfit usercode-*/
+                """;
+
+        assertEquals("static int helper(void);", PrototypeScanner.scan(content, "foo.c").missing().get(0).signature());
+    }
+
+    @Test
+    void findsNothingToInsertWithoutAClosedPrototypesRegion() {
+        String withoutRegion = """
+                /*@Pinfit(file:module-source:foo.c)*/
+                /*@Pinfit usercode+ module.source.footer*/
+                static void helper(void)
+                {
+                }
+                /*@Pinfit usercode-*/
+                """;
+        assertTrue(PrototypeScanner.scan(withoutRegion, "foo.c").isEmpty());
+
+        String unclosedRegion = """
+                /*@Pinfit(file:module-source:foo.c)*/
+                /*@Pinfit usercode+ other*/
+                static void helper(void)
+                {
+                }
+                /*@Pinfit usercode+ module.source.prototypes*/
+                """;
+        assertTrue(PrototypeScanner.scan(unclosedRegion, "foo.c").isEmpty());
+    }
+
+    @Test
+    void ignoresFilesPinfitDidNotGenerate() {
+        assertTrue(PrototypeScanner.scan("static void helper(void)\n{\n}\n", "foo.c").isEmpty());
+    }
 }

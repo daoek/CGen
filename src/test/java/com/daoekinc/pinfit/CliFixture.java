@@ -3,6 +3,8 @@ package com.daoekinc.pinfit;
 import com.daoekinc.pinfit.cli.PinfitCli;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -17,8 +19,21 @@ final class CliFixture {
     }
 
     CliFixture(Path directory, String input) {
-        cli = new PinfitCli(directory, new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)),
-                new PrintStream(output), new PrintStream(errors));
+        this(directory, new ByteArrayInputStream(input.getBytes(StandardCharsets.UTF_8)));
+    }
+
+    CliFixture(Path directory, InputStream input) {
+        cli = new PinfitCli(directory, input, new PrintStream(output), new PrintStream(errors));
+    }
+
+    /** Input that fails on every read - for the "Cannot read confirmation" paths. */
+    static InputStream failingInput() {
+        return new InputStream() {
+            @Override
+            public int read() throws IOException {
+                throw new IOException("stdin closed");
+            }
+        };
     }
 
     int run(String... arguments) {
