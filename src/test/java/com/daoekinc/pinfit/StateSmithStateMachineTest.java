@@ -85,13 +85,14 @@ class StateSmithStateMachineTest {
         assertTrue(plantuml1.contains("OPERATING : enter / door_hook_state_OPERATING_entry(sm->vars.context);"));
         assertTrue(plantuml1.contains("VariableDeclarations = \"\"\"\ndoor_context_t *context;\n\"\"\""));
         assertTrue(plantuml1.contains("CFileIncludes = \"\"\"\n#include \"../door_hooks.h\"\n\"\"\""));
-        assertTrue(plantuml1.contains("HFileTop = \"\"\"\ntypedef struct door_context_t door_context_t;\n\"\"\""));
+        assertTrue(plantuml1.contains("HFileIncludes = \"\"\"\ntypedef struct door_context_t door_context_t;\n\"\"\""));
 
         String hooksHeader = invokeRender("StateSmithHooksRenderer", "renderHeader", project, machine, emptyRegions());
         assertTrue(hooksHeader.contains("void door_hook_state_OPENING_entry(door_context_t *context);"));
         assertTrue(hooksHeader.contains("bool door_hook_transition_CLOSED_OPEN_REQUEST_guard(door_context_t *context);"));
         assertTrue(hooksHeader.contains("void door_hook_transition_OPERATING_MOTOR_FAULT_action(door_context_t *context);"));
         assertTrue(hooksHeader.contains("#include \"door.h\""));
+        assertTrue(hooksHeader.contains("#include <stdbool.h>"), "hooks header declares bool guards, so it must include stdbool.h itself");
 
         String apiHeader = invokeRender("StateSmithApiRenderer", "renderHeader", project, machine, emptyRegions());
         assertTrue(apiHeader.contains("DOOR_STATE_CLOSED"));
@@ -102,6 +103,10 @@ class StateSmithStateMachineTest {
         assertTrue(apiHeader.contains("DOOR_STATE_CLOSING"));
         assertTrue(!apiHeader.contains("DOOR_STATE_OPERATING"), "composite states must not appear in door_state_t");
         assertTrue(apiHeader.contains("door_sm sm;"));
+        // Must match door_sm.h's forward "typedef struct door_context_t door_context_t;" - an
+        // anonymous typedef'd struct would be a second, conflicting type.
+        assertTrue(apiHeader.contains("struct door_context_t\n{\n"));
+        assertTrue(!apiHeader.contains("} door_context_t;"), "context typedef comes from door_sm.h, must not be repeated");
         assertTrue(apiHeader.contains("door_event_args_MOTOR_FAULT_t MOTOR_FAULT;"));
         assertTrue(apiHeader.contains("uint32_t code;"));
         assertTrue(!apiHeader.contains("door_go_to_state"), "statesmith engine must not generate go_to_state");

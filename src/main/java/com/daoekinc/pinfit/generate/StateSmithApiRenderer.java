@@ -96,7 +96,11 @@ final class StateSmithApiRenderer {
     private static void appendContextStruct(StringBuilder out, ProjectConfig project, StateMachineSpec machine) {
         String smType = StateSmithNaming.smIdentifier(machine.name());
         out.append(PinfitTag.generatedItem("context", machine.name())).append('\n');
-        out.append("typedef struct\n{\n");
+        // Tagged, not a typedef: <name>_sm.h already forward-declares
+        // "typedef struct <name>_context_t <name>_context_t;" (StateSmith's vars.context needs it),
+        // and C99 forbids repeating that typedef - an anonymous struct here would be a second,
+        // conflicting type.
+        out.append("struct ").append(machine.name()).append("_context_t\n{\n");
         for (InterfaceSpec.Field field : machine.context()) {
             out.append(indent(project, 1));
             appendTypedName(out, field.type(), field.name());
@@ -106,7 +110,7 @@ final class StateSmithApiRenderer {
         if (hasEventArgs(machine)) {
             out.append(indent(project, 1)).append(eventArgsAggregateType(machine)).append(" event_args;\n");
         }
-        out.append("} ").append(machine.name()).append("_context_t;\n\n");
+        out.append("};\n\n");
     }
 
     private static void appendCoreDeclarations(StringBuilder out, ProjectConfig project, StateMachineSpec machine) {

@@ -95,7 +95,8 @@ final class StateSmithPlantUmlRenderer {
         out.append(machine.name()).append("_context_t *context;\n");
         out.append("\"\"\"\n\n");
         out.append("[RenderConfig.C]\n");
-        out.append("HFileTop = \"\"\"\n");
+        // HFileIncludes, not HFileTop: StateSmith emits HFileTop above its "#pragma once".
+        out.append("HFileIncludes = \"\"\"\n");
         out.append("typedef struct ").append(machine.name()).append("_context_t ").append(machine.name()).append("_context_t;\n");
         out.append("\"\"\"\n");
         out.append("CFileIncludes = \"\"\"\n");

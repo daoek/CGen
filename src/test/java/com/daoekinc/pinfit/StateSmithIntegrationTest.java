@@ -57,6 +57,61 @@ class StateSmithIntegrationTest {
         }
     }
 
+    /**
+     * Regression for two compile errors in a flat machine with guarded tick transitions and no
+     * context fields: the API header redefined {@code <name>_context_t} as an anonymous struct
+     * (conflicting with {@code <name>_sm.h}'s forward typedef), and the hooks header declared
+     * {@code bool} guards without including {@code <stdbool.h>}. Needs {@code gcc} as well as
+     * {@code ss.cli}, since both bugs only show up when the generated C is compiled.
+     */
+    @Test
+    void flatMachineWithTickGuardsCompilesCleanly() throws Exception {
+        String stateSmithVersion = detectStateSmithVersion();
+        Assumptions.assumeTrue(stateSmithVersion != null, "ss.cli not runnable on PATH - skipping StateSmith integration test");
+        Assumptions.assumeTrue(isOnPath("gcc"), "gcc not on PATH - skipping StateSmith compile test");
+
+        CliFixture cli = new CliFixture(temporaryDirectory);
+        assertEquals(0, cli.run("init"));
+        Files.writeString(temporaryDirectory.resolve("pinfit.yaml"),
+                Files.readString(temporaryDirectory.resolve("pinfit.yaml"))
+                        + "\nstateSmith:\n  command: ss.cli\n  version: " + stateSmithVersion + "\n");
+        Files.writeString(temporaryDirectory.resolve("communication_linking.state-machine.yaml"), """
+                kind: state-machine
+                engine: statesmith
+                name: communication_linking
+                header: communication_linking.h
+                source: communication_linking.c
+                context: []
+                initial: SEARCHING
+                states: [{name: SEARCHING}, {name: UART}, {name: TCP}]
+                events: [{name: UART_PACKET_RECEIVED}, {name: LINK_LOST}]
+                transitions:
+                  - { from: SEARCHING, event: UART_PACKET_RECEIVED, to: UART }
+                  - { from: SEARCHING, event: tick, to: TCP, guard: true }
+                  - { from: UART, event: LINK_LOST, to: SEARCHING }
+                  - { from: TCP, event: tick, to: SEARCHING, guard: true }
+                """);
+
+        assertEquals(0, cli.run("generate", "-v"), cli.errors());
+
+        compileOnly("communication_linking.c", "communication_linking_hooks.c");
+        // StateSmith 0.22 emits an unused static exit_up_to_state_handler() for a flat machine -
+        // its own output, not Pinfit's, so only that warning is waived for the StateSmith file.
+        compileOnly("-Wno-unused-function", "communication_linking_sm/communication_linking_sm.c");
+    }
+
+    private void compileOnly(String... arguments) throws Exception {
+        java.util.List<String> command = new java.util.ArrayList<>(
+                java.util.List.of("gcc", "-std=c99", "-Wall", "-Wextra", "-Werror", "-c"));
+        command.addAll(java.util.List.of(arguments));
+        ProcessBuilder gcc = new ProcessBuilder(command);
+        gcc.directory(temporaryDirectory.toFile());
+        gcc.redirectErrorStream(true);
+        Process compile = gcc.start();
+        String compileOutput = new String(compile.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertEquals(0, compile.waitFor(), "gcc failed:\n" + compileOutput);
+    }
+
     /** Runs {@code ss.cli --version} (bare, then with .exe) and returns the reported version, or null if unrunnable. */
     private static String detectStateSmithVersion() {
         for (String command : new String[] {"ss.cli", "ss.cli.exe"}) {

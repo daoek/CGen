@@ -28,7 +28,8 @@ final class StateSmithHooksRenderer {
         out.append(PinfitTag.generatedFile("state-machine-hooks-header", machine.source().getFileName().toString())).append('\n');
         out.append(docs.file(hooksHeaderName, machine.description() + " - StateSmith hooks")).append('\n');
         out.append("#ifndef ").append(guard).append("\n#define ").append(guard).append("\n\n");
-        out.append("#include \"").append(machine.name()).append(".h\"\n\n");
+        out.append("#include \"").append(machine.name()).append(".h\"\n");
+        out.append("#include <stdbool.h>\n\n");
         out.append(user.render("state-machine.hooks-header.preamble", "")).append('\n');
 
         for (State state : machine.allStatesFlat()) {
@@ -84,8 +85,7 @@ final class StateSmithHooksRenderer {
         StringBuilder out = new StringBuilder();
         out.append(PinfitTag.generatedFile("state-machine-hooks-source", machine.source().getFileName().toString())).append('\n');
         out.append(docs.file(StateSmithNaming.hooksSourceFileName(machine.name()), machine.description() + " - StateSmith hooks")).append('\n');
-        out.append("#include \"").append(hooksHeaderName).append("\"\n");
-        out.append("#include <stdbool.h>\n\n");
+        out.append("#include \"").append(hooksHeaderName).append("\"\n\n");
         out.append(user.render("state-machine.hooks-source.includes", "")).append('\n');
 
         for (State state : machine.allStatesFlat()) {
